@@ -16,7 +16,6 @@ import type { HouseholdMember, Pet } from '@/types';
 export default function MembersView() {
   const { triggerRefresh, refreshKey, user } = useAppStore();
   const hid = user?.householdId;
-  const hid = user?.householdId;
   const [members, setMembers] = useState<HouseholdMember[]>([]);
   const [pets, setPets] = useState<Pet[]>([]);
   const [openMember, setOpenMember] = useState(false);
@@ -27,7 +26,7 @@ export default function MembersView() {
   const [petForm, setPetForm] = useState({ name: '', species: 'Perro', breed: '', notes: '' });
 
   useEffect(() => {
-    Promise.all([fetch(\`/api/members?householdId=${hid}\`), fetch(\`/api/pets?householdId=${hid}\`)]).then(([m, p]) => {
+    Promise.all([fetch(`/api/members?householdId=${hid}`), fetch(`/api/pets?householdId=${hid}`)]).then(([m, p]) => {
       if (m.ok) m.json().then(setMembers);
       if (p.ok) p.json().then(setPets);
     });

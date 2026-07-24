@@ -45,10 +45,10 @@ export default function TransactionsView() {
     params.set('limit', '100');
     Promise.all([
       fetch(`/api/transactions?householdId=${hid}&${params}`),
-      fetch(\`/api/accounts?householdId=${hid}\`),
-      fetch(\`/api/categories?householdId=${hid}\`),
-      fetch(\`/api/members?householdId=${hid}\`),
-      fetch(\`/api/pets?householdId=${hid}\`),
+      fetch(`/api/accounts?householdId=${hid}`),
+      fetch(`/api/categories?householdId=${hid}`),
+      fetch(`/api/members?householdId=${hid}`),
+      fetch(`/api/pets?householdId=${hid}`),
     ]).then(([txRes, accRes, catRes, memRes, petRes]) => {
       if (txRes.ok) txRes.json().then(setTransactions);
       if (accRes.ok) accRes.json().then(setAccounts);

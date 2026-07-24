@@ -27,6 +27,13 @@ export default function SettingsView() {
   const [form, setForm] = useState({ name: '', description: '' });
   const [saving, setSaving] = useState(false);
 
+  // Password change state
+  const [showPwForm, setShowPwForm] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [pwLoading, setPwLoading] = useState(false);
+  const [pwMsg, setPwMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+
   useEffect(() => {
     if (!householdId) return;
     fetch(`/api/household?id=${householdId}`)
@@ -39,20 +46,17 @@ export default function SettingsView() {
       });
   }, [householdId, refreshKey]);
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!form.name || !householdId) return;
     setSaving(true);
-    try {
-      await fetch('/api/household', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: householdId, name: form.name, description: form.description || null }),
-      });
+    fetch('/api/household', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: householdId, name: form.name, description: form.description || null }),
+    }).then(() => {
       setEditing(false);
       triggerRefresh();
-    } finally {
-      setSaving(false);
-    }
+    }).finally(() => setSaving(false));
   };
 
   const cancelEdit = () => {
@@ -60,6 +64,28 @@ export default function SettingsView() {
     if (household) {
       setForm({ name: household.name, description: household.description || '' });
     }
+  };
+
+  const handleChangePassword = () => {
+    if (!user?.id) return;
+    if (newPassword.length < 6) { setPwMsg({ type: 'err', text: 'La contraseña debe tener al menos 6 caracteres' }); return; }
+    if (newPassword !== confirmPassword) { setPwMsg({ type: 'err', text: 'Las contraseñas no coinciden' }); return; }
+    setPwLoading(true);
+    setPwMsg(null);
+    fetch('/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'changePassword', userId: user.id, password: newPassword }),
+    }).then(r => r.json()).then(data => {
+      if (data.success) {
+        setPwMsg({ type: 'ok', text: 'Contraseña actualizada correctamente' });
+        setNewPassword('');
+        setConfirmPassword('');
+        setShowPwForm(false);
+      } else {
+        setPwMsg({ type: 'err', text: data.error || 'Error al cambiar la contraseña' });
+      }
+    }).catch(() => setPwMsg({ type: 'err', text: 'Error de conexión' })).finally(() => setPwLoading(false));
   };
 
   const STATS = [
@@ -100,16 +126,32 @@ export default function SettingsView() {
               <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center">
                 <DynamicIcon name="Home" className="w-5 h-5 text-emerald-600" />
               </div>
-              <div>
-                <CardTitle className="text-lg text-slate-800">Datos del Hogar</CardTitle>
-                <p className="text-xs text-slate-400">ID: {householdId}</p>
-              </div>
+              <CardTitle className="text-lg text-slate-800">Datos del Hogar</CardTitle>
             </div>
             {!editing && (
               <Button variant="outline" size="sm" className="gap-2" onClick={() => setEditing(true)}>
                 <DynamicIcon name="Edit" className="w-3.5 h-3.5" />Editar
               </Button>
             )}
+          </div>
+          {/* Household join code */}
+          <div className="mt-3 p-3 rounded-lg bg-amber-50 border border-amber-200">
+            <div className="flex items-center gap-2 mb-1">
+              <DynamicIcon name="Link" className="w-3.5 h-3.5 text-amber-600" />
+              <p className="text-xs font-medium text-amber-700">Código para unirse al hogar</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 text-sm font-mono bg-white px-3 py-1.5 rounded border border-amber-200 text-amber-900 select-all">{householdId}</code>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs"
+                onClick={() => { navigator.clipboard.writeText(householdId || ''); }}
+              >
+                <DynamicIcon name="Copy" className="w-3 h-3 mr-1" />Copiar
+              </Button>
+            </div>
+            <p className="text-[11px] text-amber-600 mt-1">Compartí este código con los miembros que quieras invitar.</p>
           </div>
         </CardHeader>
         <Separator />
@@ -174,6 +216,37 @@ export default function SettingsView() {
               <p className="text-slate-500 text-sm">{user?.email}</p>
               <p className="text-slate-400 text-xs mt-1">Hogar: {user?.householdName || household?.name || '—'}</p>
             </div>
+          </div>
+
+          <div className="mt-6">
+            {pwMsg && (
+              <div className={`mb-3 p-3 rounded-lg text-sm ${pwMsg.type === 'ok' ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
+                {pwMsg.text}
+              </div>
+            )}
+            {!showPwForm ? (
+              <Button variant="outline" className="gap-2" onClick={() => { setShowPwForm(true); setPwMsg(null); }}>
+                <DynamicIcon name="KeyRound" className="w-4 h-4" />Cambiar Contraseña
+              </Button>
+            ) : (
+              <div className="space-y-3 p-4 rounded-lg bg-slate-50 border">
+                <p className="text-sm font-medium text-slate-700">Cambiar mi contraseña</p>
+                <div className="space-y-2">
+                  <Label className="text-xs">Nueva contraseña (mín. 6 caracteres)</Label>
+                  <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="••••••" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Confirmar contraseña</Label>
+                  <Input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="••••••" />
+                </div>
+                <div className="flex gap-2">
+                  <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleChangePassword} disabled={pwLoading || !newPassword || !confirmPassword}>
+                    {pwLoading ? 'Guardando...' : 'Actualizar Contraseña'}
+                  </Button>
+                  <Button variant="outline" onClick={() => { setShowPwForm(false); setNewPassword(''); setConfirmPassword(''); setPwMsg(null); }}>Cancelar</Button>
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

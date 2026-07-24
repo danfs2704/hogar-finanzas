@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
     })).sort((a, b) => b.total - a.total);
 
     // Monthly trend
-    const monthlyTrend = [];
+    const monthlyTrend: { month: string; income: number; expense: number; balance: number }[] = [];
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const monthStr = d.toLocaleDateString('es-AR', { month: 'short', year: '2-digit' });
@@ -49,7 +49,12 @@ export async function GET(request: NextRequest) {
     }
 
     // Account summary
-    const accounts = await db.account.findMany({ where: { householdId }, include: { transactions: { where: { date: { gte: new Date(now.getFullYear(), now.getMonth(), 1).toISOString(), lt: new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString() } } } });
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString();
+    const accounts = await db.account.findMany({
+      where: { householdId },
+      include: { transactions: { where: { date: { gte: monthStart, lt: monthEnd } } } },
+    });
     const accountSummary = accounts.map(a => {
       const income = a.transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
       const expense = a.transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);

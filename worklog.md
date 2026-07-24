@@ -2,27 +2,31 @@
 
 ---
 Task ID: 1
-Agent: Main Agent
-Task: Build complete home finance management application
+Agent: main
+Task: Add user management, password recovery, and multi-tenancy to home finance app
 
 Work Log:
-- Designed Prisma schema with 7 models: User, Account, HouseholdMember, Pet, Category, Subcategory, Transaction
-- Ran db:push to create SQLite database
-- Created comprehensive seed script with 12 expense categories (Alimentos, Vivienda, Transporte, Salud, Educación, Entretenimiento, Ropa, Servicios Digitales, Mascotas, Impuestos, Regalos, Personal) and 6 income categories (Salario, Freelance, Inversiones, Ventas, Alquileres, Otros), each with multiple subcategories and distinctive icons
-- Created 4 default accounts (ARS and USD, efectivo and bancaria)
-- Built 7 API routes: auth, accounts, members, pets, categories, subcategories, transactions, analytics
-- Created DynamicIcon helper with 200+ Lucide icons and 24 color options
-- Built 7 frontend components: LoginView, Sidebar, DashboardView, AccountsView, MembersView, CategoriesView, TransactionsView, AnalyticsView
-- Implemented Zustand store for global state management
-- Fixed all lint errors (React 19 strict rules for effects, component declaration order)
-- Fixed SelectItem rendering issue with Radix UI primitives
-- Verified all pages with Agent Browser: Login, Dashboard, Cuentas, Hogar, Categorías, Transacciones, Análisis
+- Read entire codebase state (schema, API routes, components, store, types)
+- Fixed duplicate `const hid` bugs in DashboardView, AccountsView, CategoriesView, MembersView
+- Fixed escaped backtick (`\``) parsing errors across 5 component files
+- Fixed LoginView fetch chain scope issue (`.then(r => r.json()).then(data => { if (r.ok) ... })`) — changed to `.then(async r => { const data = await r.json(); ... })`
+- Fixed AnalyticsView missing `user` from useAppStore and missing `hid` variable
+- Fixed analytics route TS error (untyped `monthlyTrend` array) by adding explicit type annotation
+- Fixed TypeScript type issues: added `isMinor` to memberSpending type, `_count` to Subcategory type
+- Fixed icons.tsx type cast (added `as unknown`)
+- Added `UsersView` and `SettingsView` imports + cases to page.tsx renderView switch
+- Enhanced SettingsView: password change form with validation, household join code display with copy button
+- Enhanced UsersView: admin password reset dialog with key icon button
+- Enhanced LoginView: 4-tab layout (Ingresar / Crear Hogar / Unirse / Recuperar), Enter key support
+- Updated auth route: auto-seeds 18 categories (12 expense + 6 income) with 60+ subcategories for every new household registration
+- All API routes already had householdId-based isolation from prior session
+- Production build successful, all 10 API tests passed
 
 Stage Summary:
-- Full application running at localhost:3000
-- Login: admin@hogar.com / admin123
-- All 6 views working correctly
-- ARS/USD currency support
-- Category system with 18 categories and 60+ subcategories
-- Member and pet management with minor/adult distinction
-- Analytics with per-member spending breakdown
+- **User Management**: Admin can create/edit/delete/toggle users via UsersView (admin-only sidebar item)
+- **Password Change**: Users change password in SettingsView; Admins reset any user's password via UsersView key icon
+- **Password Recovery**: Forgot password tab shows admin contact info for the user's household
+- **Multi-tenancy**: Multiple households with row-level isolation via householdId on all models and API routes
+- **Join Household**: New tab on login with household code input; code visible in SettingsView
+- **Auto-seeding**: New households automatically get 18 categories, 60+ subcategories, 4 default accounts
+- All verified via comprehensive API testing (login, user CRUD, password change, forgot password, new household registration, data isolation)

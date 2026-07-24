@@ -7,13 +7,15 @@ import { useAppStore } from '@/store/useAppStore';
 import type { AnalyticsData } from '@/types';
 
 export default function AnalyticsView() {
-  const { refreshKey } = useAppStore();
+  const { refreshKey, user } = useAppStore();
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const hid = user?.householdId;
+
   useEffect(() => {
     if (!hid) return;
-    fetch(\`/api/analytics?householdId=${hid}\`).then(r => r.ok ? r.json() : null).then(d => { setData(d); setLoading(false); }).catch(() => setLoading(false));
+    fetch(`/api/analytics?householdId=${hid}`).then(r => r.ok ? r.json() : null).then(d => { setData(d); setLoading(false); }).catch(() => setLoading(false));
   }, [refreshKey, hid]);
 
   const fmtARS = (n: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n);

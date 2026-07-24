@@ -35,7 +35,7 @@ interface DynamicIconProps extends LucideProps {
 }
 
 export const DynamicIcon = forwardRef<SVGSVGElement, DynamicIconProps>(({ name, ...props }, ref) => {
-  const IconComponent = (LucideIcons as Record<string, React.ComponentType<LucideProps>>)[name];
+  const IconComponent = (LucideIcons as unknown as Record<string, React.ComponentType<LucideProps>>)[name];
   if (!IconComponent) {
     return <LucideIcons.CircleDot ref={ref} {...props} />;
   }

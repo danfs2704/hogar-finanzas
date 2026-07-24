@@ -14,7 +14,6 @@ import type { Account } from '@/types';
 export default function AccountsView() {
   const { triggerRefresh, refreshKey, user } = useAppStore();
   const hid = user?.householdId;
-  const hid = user?.householdId;
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Account | null>(null);
@@ -24,7 +23,7 @@ export default function AccountsView() {
 
   useEffect(() => {
     if (!hid) return;
-    fetch(\`/api/accounts?householdId=${hid}\`).then(r => r.ok ? r.json() : []).then(setAccounts);
+    fetch(`/api/accounts?householdId=${hid}`).then(r => r.ok ? r.json() : []).then(setAccounts);
   }, [refreshKey, hid]);
 
   const resetForm = () => {

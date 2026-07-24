@@ -55,6 +55,7 @@ export interface Subcategory {
   color: string;
   categoryId: string;
   isDefault: boolean;
+  _count?: { transactions: number };
 }
 
 export interface Transaction {
@@ -79,7 +80,7 @@ export interface Transaction {
 }
 
 export interface AnalyticsData {
-  memberSpending: { memberId: string; memberName: string; totalExpense: number; totalIncome: number; transactions: number }[];
+  memberSpending: { memberId: string; memberName: string; isMinor: boolean; totalExpense: number; totalIncome: number; transactions: number }[];
   categoryBreakdown: { categoryId: string; categoryName: string; categoryIcon: string; categoryColor: string; total: number; percentage: number; subcategories: { subcategoryId: string; subcategoryName: string; total: number; percentage: number }[] }[];
   monthlyTrend: { month: string; income: number; expense: number; balance: number }[];
   accountSummary: { accountId: string; accountName: string; currency: string; balance: number; income: number; expense: number }[];

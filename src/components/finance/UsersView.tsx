@@ -29,10 +29,14 @@ export default function UsersView() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [open, setOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
   const [editing, setEditing] = useState<UserRow | null>(null);
+  const [resetting, setResetting] = useState<UserRow | null>(null);
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'member' as 'admin' | 'member' });
   const [editForm, setEditForm] = useState({ name: '', role: 'admin' as 'admin' | 'member', isActive: true });
+  const [resetPw, setResetPw] = useState('');
   const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   useEffect(() => {
     if (!householdId) return;
@@ -44,75 +48,91 @@ export default function UsersView() {
   const resetForm = () => {
     setForm({ name: '', email: '', password: '', role: 'member' });
     setEditForm({ name: '', role: 'admin', isActive: true });
+    setResetPw('');
+    setMsg(null);
     setEditing(null);
+    setResetting(null);
   };
 
-  const handleCreate = async () => {
+  const handleCreate = () => {
     if (!form.name || !form.email || !form.password || !householdId) return;
     setLoading(true);
-    try {
-      const res = await fetch('/api/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, householdId }),
-      });
-      if (res.ok) {
+    fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...form, householdId }),
+    }).then(r => {
+      if (r.ok) {
         setOpen(false);
         resetForm();
         triggerRefresh();
       } else {
-        const data = await res.json();
-        alert(data.error || 'Error al crear usuario');
+        return r.json().then(d => alert(d.error || 'Error al crear usuario'));
       }
-    } finally {
-      setLoading(false);
-    }
+    }).finally(() => setLoading(false));
   };
 
-  const handleUpdate = async () => {
+  const handleUpdate = () => {
     if (!editing) return;
     setLoading(true);
-    try {
-      await fetch('/api/users', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: editing.id, ...editForm }),
-      });
+    fetch('/api/users', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: editing.id, ...editForm }),
+    }).then(() => {
       setEditOpen(false);
       resetForm();
       triggerRefresh();
-    } finally {
-      setLoading(false);
-    }
+    }).finally(() => setLoading(false));
   };
 
-  const handleDelete = async (id: string) => {
-    if (id === user?.id) {
-      alert('No puede eliminar su propia cuenta.');
-      return;
-    }
+  const handleDelete = (id: string) => {
+    if (id === user?.id) { alert('No puede eliminar su propia cuenta.'); return; }
     if (!confirm('¿Eliminar este usuario? Sus transacciones también se eliminarán.')) return;
-    await fetch(`/api/users?id=${id}`, { method: 'DELETE' });
-    triggerRefresh();
+    fetch(`/api/users?id=${id}`, { method: 'DELETE' }).then(() => triggerRefresh());
   };
 
-  const handleToggleActive = async (u: UserRow) => {
-    if (u.id === user?.id) {
-      alert('No puede desactivar su propia cuenta.');
-      return;
-    }
-    await fetch('/api/users', {
+  const handleToggleActive = (u: UserRow) => {
+    if (u.id === user?.id) { alert('No puede desactivar su propia cuenta.'); return; }
+    fetch('/api/users', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: u.id, isActive: !u.isActive }),
-    });
-    triggerRefresh();
+    }).then(() => triggerRefresh());
+  };
+
+  const handleResetPassword = () => {
+    if (!resetting || !resetPw) return;
+    if (resetPw.length < 6) { setMsg({ type: 'err', text: 'Mínimo 6 caracteres' }); return; }
+    setLoading(true);
+    setMsg(null);
+    fetch('/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'adminResetPassword', userId: resetting.id, password: resetPw }),
+    }).then(r => r.json()).then(data => {
+      if (data.success) {
+        setMsg({ type: 'ok', text: 'Contraseña restablecida correctamente' });
+        setResetPw('');
+        setResetting(null);
+        setResetOpen(false);
+      } else {
+        setMsg({ type: 'err', text: data.error || 'Error' });
+      }
+    }).finally(() => setLoading(false));
   };
 
   const openEdit = (u: UserRow) => {
     setEditing(u);
     setEditForm({ name: u.name, role: u.role, isActive: u.isActive });
     setEditOpen(true);
+  };
+
+  const openReset = (u: UserRow) => {
+    setResetting(u);
+    setResetPw('');
+    setMsg(null);
+    setResetOpen(true);
   };
 
   const formatDate = (d: string) => new Date(d).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -207,6 +227,9 @@ export default function UsersView() {
                   <TableCell className="text-slate-400 text-xs">{formatDate(u.createdAt)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" title="Restablecer contraseña" onClick={() => openReset(u)}>
+                        <DynamicIcon name="KeyRound" className="w-3.5 h-3.5 text-amber-500" />
+                      </Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(u)}>
                         <DynamicIcon name="Edit" className="w-3.5 h-3.5" />
                       </Button>
@@ -236,6 +259,7 @@ export default function UsersView() {
         </CardContent>
       </Card>
 
+      {/* Edit User Dialog */}
       <Dialog open={editOpen} onOpenChange={(v) => { setEditOpen(v); if (!v) resetForm(); }}>
         <DialogContent>
           <DialogHeader>
@@ -258,6 +282,32 @@ export default function UsersView() {
             </div>
             <Button className="w-full bg-emerald-600 hover:bg-emerald-700" onClick={handleUpdate} disabled={loading || !editForm.name}>
               {loading ? 'Guardando...' : 'Guardar Cambios'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={resetOpen} onOpenChange={(v) => { setResetOpen(v); if (!v) resetForm(); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Restablecer Contraseña</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <p className="text-sm text-slate-500">
+              Estás cambiando la contraseña de <span className="font-semibold text-slate-700">{resetting?.name}</span> ({resetting?.email}).
+            </p>
+            {msg && (
+              <div className={`p-3 rounded-lg text-sm ${msg.type === 'ok' ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
+                {msg.text}
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label>Nueva contraseña (mín. 6 caracteres)</Label>
+              <Input type="password" value={resetPw} onChange={e => setResetPw(e.target.value)} placeholder="••••••" />
+            </div>
+            <Button className="w-full bg-amber-500 hover:bg-amber-600" onClick={handleResetPassword} disabled={loading || !resetPw}>
+              {loading ? 'Guardando...' : 'Restablecer Contraseña'}
             </Button>
           </div>
         </DialogContent>

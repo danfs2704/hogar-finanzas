@@ -10,6 +10,8 @@ import MembersView from '@/components/finance/MembersView';
 import CategoriesView from '@/components/finance/CategoriesView';
 import TransactionsView from '@/components/finance/TransactionsView';
 import AnalyticsView from '@/components/finance/AnalyticsView';
+import UsersView from '@/components/finance/UsersView';
+import SettingsView from '@/components/finance/SettingsView';
 import { Button } from '@/components/ui/button';
 import { DynamicIcon } from '@/lib/icons';
 import { useState } from 'react';
@@ -37,6 +39,8 @@ export default function Home() {
       case 'categories': return <CategoriesView />;
       case 'transactions': return <TransactionsView />;
       case 'analytics': return <AnalyticsView />;
+      case 'users': return <UsersView />;
+      case 'settings': return <SettingsView />;
       default: return <DashboardView />;
     }
   };

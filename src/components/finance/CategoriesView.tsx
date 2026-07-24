@@ -39,7 +39,6 @@ function IconPicker({ form, setForm, show, setShow, search, setSearch, filtered 
 export default function CategoriesView() {
   const { triggerRefresh, refreshKey, user } = useAppStore();
   const hid = user?.householdId;
-  const hid = user?.householdId;
   const [categories, setCategories] = useState<Category[]>([]);
   const [open, setOpen] = useState(false);
   const [openSub, setOpenSub] = useState(false);
@@ -55,7 +54,7 @@ export default function CategoriesView() {
 
   useEffect(() => {
     if (!hid) return;
-    fetch(\`/api/categories?householdId=${hid}\`).then(r => r.ok ? r.json() : []).then(setCategories);
+    fetch(`/api/categories?householdId=${hid}`).then(r => r.ok ? r.json() : []).then(setCategories);
   }, [refreshKey, hid]);
 
   const expenses = categories.filter(c => c.type === 'expense');
