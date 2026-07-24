@@ -12,7 +12,9 @@ import { useAppStore } from '@/store/useAppStore';
 import type { Account } from '@/types';
 
 export default function AccountsView() {
-  const { triggerRefresh, refreshKey } = useAppStore();
+  const { triggerRefresh, refreshKey, user } = useAppStore();
+  const hid = user?.householdId;
+  const hid = user?.householdId;
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Account | null>(null);
@@ -21,8 +23,9 @@ export default function AccountsView() {
   const [showIcons, setShowIcons] = useState(false);
 
   useEffect(() => {
-    fetch('/api/accounts').then(r => r.ok ? r.json() : []).then(setAccounts);
-  }, [refreshKey]);
+    if (!hid) return;
+    fetch(\`/api/accounts?householdId=${hid}\`).then(r => r.ok ? r.json() : []).then(setAccounts);
+  }, [refreshKey, hid]);
 
   const resetForm = () => {
     setForm({ name: '', currency: 'ARS', balance: 0, color: '#6366f1', icon: 'Wallet' });
@@ -34,9 +37,9 @@ export default function AccountsView() {
   const handleSave = async () => {
     if (!form.name) return;
     if (editing) {
-      await fetch('/api/accounts', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editing.id, ...form }) });
+      await fetch('/api/accounts', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editing.id, ...form, householdId: hid }) });
     } else {
-      await fetch('/api/accounts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
+      await fetch('/api/accounts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, householdId: hid }) });
     }
     setOpen(false);
     resetForm();

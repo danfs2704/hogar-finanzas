@@ -4,6 +4,8 @@ import { db } from '@/lib/db';
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    const householdId = searchParams.get('householdId');
+    if (!householdId) return NextResponse.json({ error: 'householdId requerido' }, { status: 400 });
     const type = searchParams.get('type');
     const accountId = searchParams.get('accountId');
     const categoryId = searchParams.get('categoryId');
@@ -11,17 +13,14 @@ export async function GET(request: NextRequest) {
     const month = searchParams.get('month');
     const limit = parseInt(searchParams.get('limit') || '50');
 
-    const where: Record<string, unknown> = {};
+    const where: Record<string, unknown> = { householdId };
     if (type) where.type = type;
     if (accountId) where.accountId = accountId;
     if (categoryId) where.categoryId = categoryId;
     if (memberId) where.memberId = memberId;
     if (month) {
       const [y, m] = month.split('-').map(Number);
-      where.date = {
-        gte: new Date(y, m - 1, 1).toISOString(),
-        lt: new Date(y, m, 1).toISOString(),
-      };
+      where.date = { gte: new Date(y, m - 1, 1).toISOString(), lt: new Date(y, m, 1).toISOString() };
     }
 
     const transactions = await db.transaction.findMany({
@@ -47,33 +46,24 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { type, amount, description, date, notes, accountId, categoryId, subcategoryId, memberId, petId, userId } = body;
+    const { type, amount, description, date, notes, accountId, categoryId, subcategoryId, memberId, petId, userId, householdId } = body;
+    if (!householdId) return NextResponse.json({ error: 'householdId requerido' }, { status: 400 });
 
     const transaction = await db.transaction.create({
       data: {
-        type: type || 'expense',
-        amount: parseFloat(amount),
-        description,
-        date: date ? new Date(date) : new Date(),
-        notes: notes || null,
-        accountId,
-        categoryId,
-        subcategoryId: subcategoryId || null,
-        memberId: memberId || null,
-        petId: petId || null,
-        userId: userId || null,
+        type: type || 'expense', amount: parseFloat(amount), description,
+        date: date ? new Date(date) : new Date(), notes: notes || null,
+        accountId, categoryId, subcategoryId: subcategoryId || null,
+        memberId: memberId || null, petId: petId || null,
+        userId: userId || null, householdId,
       },
     });
 
-    // Update account balance
     const account = await db.account.findUnique({ where: { id: accountId } });
     if (account) {
-      const newBalance = type === 'income'
-        ? account.balance + parseFloat(amount)
-        : account.balance - parseFloat(amount);
+      const newBalance = type === 'income' ? account.balance + parseFloat(amount) : account.balance - parseFloat(amount);
       await db.account.update({ where: { id: accountId }, data: { balance: newBalance } });
     }
-
     return NextResponse.json(transaction, { status: 201 });
   } catch (error) {
     console.error('Transactions POST error:', error);
@@ -86,15 +76,11 @@ export async function DELETE(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     if (!id) return NextResponse.json({ error: 'ID requerido' }, { status: 400 });
-
     const transaction = await db.transaction.findUnique({ where: { id }, include: { account: true } });
     if (transaction) {
-      const newBalance = transaction.type === 'income'
-        ? transaction.account.balance - transaction.amount
-        : transaction.account.balance + transaction.amount;
+      const newBalance = transaction.type === 'income' ? transaction.account.balance - transaction.amount : transaction.account.balance + transaction.amount;
       await db.account.update({ where: { id: transaction.accountId }, data: { balance: newBalance } });
     }
-
     await db.transaction.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -134,74 +134,41 @@ const INCOME_CATEGORIES = [
   ]},
 ];
 
-async function main() {
-  console.log('🌱 Seeding database...');
+const DEFAULT_ACCOUNTS = [
+  { name: 'Efectivo (ARS)', currency: 'ARS', icon: 'Banknote', color: '#22c55e' },
+  { name: 'Cuenta Bancaria (ARS)', currency: 'ARS', icon: 'Landmark', color: '#3b82f6' },
+  { name: 'Efectivo (USD)', currency: 'USD', icon: 'DollarSign', color: '#10b981' },
+  { name: 'Cuenta Bancaria (USD)', currency: 'USD', icon: 'PiggyBank', color: '#8b5cf6' },
+];
 
-  // Create admin user
-  const hashedPassword = await bcrypt.hash('admin123', 10);
-  await prisma.user.upsert({
-    where: { email: 'admin@hogar.com' },
-    update: {},
-    create: { email: 'admin@hogar.com', password: hashedPassword, name: 'Administrador', isAdmin: true },
+async function seedHousehold(name: string, adminEmail: string, adminPassword: string, adminName: string) {
+  const hashed = await bcrypt.hash(adminPassword, 10);
+  const household = await prisma.household.create({
+    data: {
+      name,
+      users: { create: { email: adminEmail, password: hashed, name: adminName, role: 'admin' } },
+      accounts: { create: DEFAULT_ACCOUNTS },
+    },
+    include: { users: true },
   });
 
-  // Create categories
   for (const cat of [...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES]) {
     const type = EXPENSE_CATEGORIES.includes(cat) ? 'expense' : 'income';
-    const category = await prisma.category.upsert({
-      where: { id: `${type}-${cat.name.toLowerCase().replace(/\s+/g, '-')}` },
-      update: {},
-      create: {
-        id: `${type}-${cat.name.toLowerCase().replace(/\s+/g, '-')}`,
-        name: cat.name,
-        type,
-        icon: cat.icon,
-        color: cat.color,
-        isDefault: true,
+    const category = await prisma.category.create({
+      data: {
+        name: cat.name, type, icon: cat.icon, color: cat.color, isDefault: true, householdId: household.id,
+        subcategories: { create: cat.subcategories.map(s => ({ name: s.name, icon: s.icon, color: s.color, isDefault: true })) },
       },
     });
-
-    for (const sub of cat.subcategories) {
-      await prisma.subcategory.upsert({
-        where: { id: `${category.id}-${sub.name.toLowerCase().replace(/\s+/g, '-')}` },
-        update: {},
-        create: {
-          id: `${category.id}-${sub.name.toLowerCase().replace(/\s+/g, '-')}`,
-          name: sub.name,
-          icon: sub.icon,
-          color: sub.color,
-          categoryId: category.id,
-          isDefault: true,
-        },
-      });
-    }
   }
 
-  // Create default accounts
-  await prisma.account.upsert({
-    where: { id: 'acct-ars-efectivo' },
-    update: {},
-    create: { id: 'acct-ars-efectivo', name: 'Efectivo (ARS)', currency: 'ARS', balance: 0, icon: 'Banknote', color: '#22c55e' },
-  });
-  await prisma.account.upsert({
-    where: { id: 'acct-ars-banco' },
-    update: {},
-    create: { id: 'acct-ars-banco', name: 'Cuenta Bancaria (ARS)', currency: 'ARS', balance: 0, icon: 'Landmark', color: '#3b82f6' },
-  });
-  await prisma.account.upsert({
-    where: { id: 'acct-usd-efectivo' },
-    update: {},
-    create: { id: 'acct-usd-efectivo', name: 'Efectivo (USD)', currency: 'USD', balance: 0, icon: 'DollarSign', color: '#10b981' },
-  });
-  await prisma.account.upsert({
-    where: { id: 'acct-usd-banco' },
-    update: {},
-    create: { id: 'acct-usd-banco', name: 'Cuenta Bancaria (USD)', currency: 'USD', balance: 0, icon: 'PiggyBank', color: '#8b5cf6' },
-  });
-
-  console.log('✅ Seed completed!');
+  return household;
 }
 
-main()
-  .then(() => prisma.$disconnect())
-  .catch((e) => { console.error(e); prisma.$disconnect(); process.exit(1); });
+async function main() {
+  console.log('🌱 Seeding multi-household database...');
+  await seedHousehold('Mi Hogar', 'admin@hogar.com', 'admin123', 'Administrador');
+  console.log('✅ Seed completed! (admin@hogar.com / admin123)');
+}
+
+main().then(() => prisma.$disconnect()).catch((e) => { console.error(e); prisma.$disconnect(); process.exit(1); });

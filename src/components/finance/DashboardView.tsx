@@ -8,7 +8,9 @@ import type { Account, Transaction, AnalyticsData } from '@/types';
 import { BarChart3, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 
 export default function DashboardView() {
-  const { triggerRefresh, refreshKey } = useAppStore();
+  const { triggerRefresh, refreshKey, user } = useAppStore();
+  const hid = user?.householdId;
+  const hid = user?.householdId;
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [recentTx, setRecentTx] = useState<Transaction[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
@@ -16,15 +18,16 @@ export default function DashboardView() {
 
   useEffect(() => {
     let cancelled = false;
+    if (!hid) return;
     Promise.all([
-      fetch('/api/accounts').then(r => r.ok ? r.json() : []),
-      fetch('/api/transactions?limit=8').then(r => r.ok ? r.json() : []),
-      fetch('/api/analytics').then(r => r.ok ? r.json() : null),
+      fetch(\`/api/accounts?householdId=${hid}\`).then(r => r.ok ? r.json() : []),
+      fetch(`/api/transactions?householdId=${hid}&limit=8`).then(r => r.ok ? r.json() : []),
+      fetch(\`/api/analytics?householdId=${hid}\`).then(r => r.ok ? r.json() : null),
     ]).then(([acc, tx, an]) => {
       if (!cancelled) { setAccounts(acc); setRecentTx(tx); setAnalytics(an); setLoading(false); }
     }).catch(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [refreshKey]);
+  }, [refreshKey, hid]);
 
   const totalARS = accounts.filter(a => a.currency === 'ARS').reduce((s, a) => s + a.balance, 0);
   const totalUSD = accounts.filter(a => a.currency === 'USD').reduce((s, a) => s + a.balance, 0);

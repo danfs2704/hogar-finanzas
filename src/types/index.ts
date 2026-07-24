@@ -2,7 +2,9 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  isAdmin: boolean;
+  role: 'admin' | 'member';
+  householdId: string;
+  householdName?: string;
 }
 
 export interface Account {
@@ -83,4 +85,4 @@ export interface AnalyticsData {
   accountSummary: { accountId: string; accountName: string; currency: string; balance: number; income: number; expense: number }[];
 }
 
-export type ViewMode = 'dashboard' | 'accounts' | 'members' | 'categories' | 'transactions' | 'analytics';
+export type ViewMode = 'dashboard' | 'accounts' | 'members' | 'categories' | 'transactions' | 'analytics' | 'users' | 'settings';

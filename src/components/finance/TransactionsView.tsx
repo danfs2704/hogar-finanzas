@@ -14,6 +14,7 @@ import type { Transaction, Account, Category, HouseholdMember, Pet } from '@/typ
 
 export default function TransactionsView() {
   const { triggerRefresh, refreshKey, user } = useAppStore();
+  const hid = user?.householdId;
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -43,11 +44,11 @@ export default function TransactionsView() {
     if (filterMember && filterMember !== 'all') params.set('memberId', filterMember);
     params.set('limit', '100');
     Promise.all([
-      fetch(`/api/transactions?${params}`),
-      fetch('/api/accounts'),
-      fetch('/api/categories'),
-      fetch('/api/members'),
-      fetch('/api/pets'),
+      fetch(`/api/transactions?householdId=${hid}&${params}`),
+      fetch(\`/api/accounts?householdId=${hid}\`),
+      fetch(\`/api/categories?householdId=${hid}\`),
+      fetch(\`/api/members?householdId=${hid}\`),
+      fetch(\`/api/pets?householdId=${hid}\`),
     ]).then(([txRes, accRes, catRes, memRes, petRes]) => {
       if (txRes.ok) txRes.json().then(setTransactions);
       if (accRes.ok) accRes.json().then(setAccounts);
@@ -57,7 +58,7 @@ export default function TransactionsView() {
     });
   }, [tab, filterAccount, filterMember]);
 
-  useEffect(() => { loadData(); }, [loadData, refreshKey]);
+  useEffect(() => { loadData(); }, [loadData, refreshKey, hid]);
 
   const filteredCategories = categories.filter(c => c.type === form.type);
   const selectedCategory = categories.find(c => c.id === form.categoryId);
@@ -75,6 +76,7 @@ export default function TransactionsView() {
         memberId: form.memberId || null,
         petId: form.petId || null,
         userId: user?.id || null,
+        householdId: hid,
       }),
     });
     setOpen(false);

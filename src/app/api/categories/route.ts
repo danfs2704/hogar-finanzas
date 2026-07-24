@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url);
+    const householdId = searchParams.get('householdId');
+    if (!householdId) return NextResponse.json({ error: 'householdId requerido' }, { status: 400 });
     const categories = await db.category.findMany({
+      where: { householdId },
       orderBy: [{ type: 'asc' }, { name: 'asc' }],
       include: {
         _count: { select: { subcategories: true, transactions: true } },
@@ -20,9 +24,10 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, type, icon, color } = body;
+    const { name, type, icon, color, householdId } = body;
+    if (!householdId) return NextResponse.json({ error: 'householdId requerido' }, { status: 400 });
     const category = await db.category.create({
-      data: { name, type: type || 'expense', icon: icon || 'Tag', color: color || '#6366f1' },
+      data: { name, type: type || 'expense', icon: icon || 'Tag', color: color || '#6366f1', householdId },
     });
     return NextResponse.json(category, { status: 201 });
   } catch (error) {
@@ -56,6 +61,6 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Categories DELETE error:', error);
-    return NextResponse.json({ error: 'Error al eliminar categoría (puede tener transacciones asociadas)' }, { status: 500 });
+    return NextResponse.json({ error: 'Error al eliminar categoría' }, { status: 500 });
   }
 }

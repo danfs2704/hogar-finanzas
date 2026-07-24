@@ -14,7 +14,9 @@ import { useAppStore } from '@/store/useAppStore';
 import type { HouseholdMember, Pet } from '@/types';
 
 export default function MembersView() {
-  const { triggerRefresh, refreshKey } = useAppStore();
+  const { triggerRefresh, refreshKey, user } = useAppStore();
+  const hid = user?.householdId;
+  const hid = user?.householdId;
   const [members, setMembers] = useState<HouseholdMember[]>([]);
   const [pets, setPets] = useState<Pet[]>([]);
   const [openMember, setOpenMember] = useState(false);
@@ -25,18 +27,18 @@ export default function MembersView() {
   const [petForm, setPetForm] = useState({ name: '', species: 'Perro', breed: '', notes: '' });
 
   useEffect(() => {
-    Promise.all([fetch('/api/members'), fetch('/api/pets')]).then(([m, p]) => {
+    Promise.all([fetch(\`/api/members?householdId=${hid}\`), fetch(\`/api/pets?householdId=${hid}\`)]).then(([m, p]) => {
       if (m.ok) m.json().then(setMembers);
       if (p.ok) p.json().then(setPets);
     });
-  }, [refreshKey]);
+  }, [refreshKey, hid]);
 
   const handleSaveMember = async () => {
     if (!memberForm.name) return;
     if (editMember) {
-      await fetch('/api/members', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editMember.id, ...memberForm }) });
+      await fetch('/api/members', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editMember.id, ...memberForm, householdId: hid }) });
     } else {
-      await fetch('/api/members', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(memberForm) });
+      await fetch('/api/members', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...memberForm, householdId: hid }) });
     }
     setOpenMember(false);
     setEditMember(null);
@@ -47,9 +49,9 @@ export default function MembersView() {
   const handleSavePet = async () => {
     if (!petForm.name) return;
     if (editPet) {
-      await fetch('/api/pets', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editPet.id, ...petForm }) });
+      await fetch('/api/pets', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editPet.id, ...petForm, householdId: hid }) });
     } else {
-      await fetch('/api/pets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(petForm) });
+      await fetch('/api/pets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...petForm, householdId: hid }) });
     }
     setOpenPet(false);
     setEditPet(null);

@@ -7,55 +7,80 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  name      String
-  isAdmin   Boolean  @default(true)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model Household {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
+  users           User[]
+  accounts        Account[]
+  members         HouseholdMember[]
+  pets            Pet[]
+  categories      Category[]
+  transactions    Transaction[]
+}
+
+model User {
+  id          String   @id @default(cuid())
+  email       String
+  password    String
+  name        String
+  role        String   @default("member")
+  isActive    Boolean  @default(true)
+  householdId String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  household    Household     @relation(fields: [householdId], references: [id])
   transactions Transaction[]
+
+  @@unique([email, householdId])
 }
 
 model HouseholdMember {
-  id        String   @id @default(cuid())
-  name      String
-  isMinor   Boolean  @default(false)
-  avatar    String?
-  notes     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  name        String
+  isMinor     Boolean  @default(false)
+  avatar      String?
+  notes       String?
+  householdId String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
+  household    Household     @relation(fields: [householdId], references: [id])
   transactions Transaction[]
 }
 
 model Pet {
-  id        String   @id @default(cuid())
-  name      String
-  species   String   @default("Perro")
-  breed     String?
-  avatar    String?
-  notes     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  name        String
+  species     String   @default("Perro")
+  breed       String?
+  avatar      String?
+  notes       String?
+  householdId String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
+  household    Household     @relation(fields: [householdId], references: [id])
   transactions Transaction[]
 }
 
 model Account {
-  id        String   @id @default(cuid())
-  name      String
-  currency  String   @default("ARS")
-  balance   Float    @default(0)
-  color     String   @default("#6366f1")
-  icon      String   @default("Wallet")
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  name        String
+  currency    String   @default("ARS")
+  balance     Float    @default(0)
+  color       String   @default("#6366f1")
+  icon        String   @default("Wallet")
+  isActive    Boolean  @default(true)
+  householdId String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
+  household    Household     @relation(fields: [householdId], references: [id])
   transactions Transaction[]
 }
 
@@ -66,24 +91,26 @@ model Category {
   icon        String
   color       String        @default("#6366f1")
   isDefault   Boolean       @default(false)
+  householdId String
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
-  subcategories  Subcategory[]
-  transactions    Transaction[]
+  household     Household     @relation(fields: [householdId], references: [id])
+  subcategories Subcategory[]
+  transactions  Transaction[]
 }
 
 model Subcategory {
-  id          String     @id @default(cuid())
+  id          String   @id @default(cuid())
   name        String
   icon        String
-  color       String     @default("#6366f1")
+  color       String   @default("#6366f1")
   categoryId  String
-  isDefault   Boolean    @default(false)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  category    Category   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  category     Category      @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   transactions Transaction[]
 }
 
@@ -94,6 +121,7 @@ model Transaction {
   description     String
   date            DateTime         @default(now())
   notes           String?
+  householdId     String
 
   accountId       String
   categoryId      String
@@ -102,6 +130,7 @@ model Transaction {
   petId           String?
   userId          String?
 
+  household       Household        @relation(fields: [householdId], references: [id])
   account         Account          @relation(fields: [accountId], references: [id])
   category        Category         @relation(fields: [categoryId], references: [id])
   subcategory     Subcategory?     @relation(fields: [subcategoryId], references: [id])

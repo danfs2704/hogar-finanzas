@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url);
+    const householdId = searchParams.get('householdId');
+    if (!householdId) return NextResponse.json({ error: 'householdId requerido' }, { status: 400 });
     const members = await db.householdMember.findMany({
+      where: { householdId },
       orderBy: { createdAt: 'desc' },
       include: { _count: { select: { transactions: true } } },
     });
@@ -17,9 +21,10 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, isMinor, avatar, notes } = body;
+    const { name, isMinor, avatar, notes, householdId } = body;
+    if (!householdId) return NextResponse.json({ error: 'householdId requerido' }, { status: 400 });
     const member = await db.householdMember.create({
-      data: { name, isMinor: isMinor || false, avatar: avatar || null, notes: notes || null },
+      data: { name, isMinor: isMinor || false, avatar: avatar || null, notes: notes || null, householdId },
     });
     return NextResponse.json(member, { status: 201 });
   } catch (error) {

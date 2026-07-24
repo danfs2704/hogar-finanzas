@@ -37,7 +37,9 @@ function IconPicker({ form, setForm, show, setShow, search, setSearch, filtered 
 }
 
 export default function CategoriesView() {
-  const { triggerRefresh, refreshKey } = useAppStore();
+  const { triggerRefresh, refreshKey, user } = useAppStore();
+  const hid = user?.householdId;
+  const hid = user?.householdId;
   const [categories, setCategories] = useState<Category[]>([]);
   const [open, setOpen] = useState(false);
   const [openSub, setOpenSub] = useState(false);
@@ -52,8 +54,9 @@ export default function CategoriesView() {
   const [expandedCat, setExpandedCat] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/categories').then(r => r.ok ? r.json() : []).then(setCategories);
-  }, [refreshKey]);
+    if (!hid) return;
+    fetch(\`/api/categories?householdId=${hid}\`).then(r => r.ok ? r.json() : []).then(setCategories);
+  }, [refreshKey, hid]);
 
   const expenses = categories.filter(c => c.type === 'expense');
   const incomes = categories.filter(c => c.type === 'income');
@@ -61,9 +64,9 @@ export default function CategoriesView() {
   const saveCategory = async () => {
     if (!catForm.name) return;
     if (editCat) {
-      await fetch('/api/categories', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editCat.id, name: catForm.name, icon: catForm.icon, color: catForm.color }) });
+      await fetch('/api/categories', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editCat.id, name: catForm.name, icon: catForm.icon, color: catForm.color, householdId: hid }) });
     } else {
-      await fetch('/api/categories', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(catForm) });
+      await fetch('/api/categories', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...catForm, householdId: hid }) });
     }
     setOpen(false); resetCatForm(); triggerRefresh();
   };
@@ -75,7 +78,7 @@ export default function CategoriesView() {
 
   const saveSubcategory = async () => {
     if (!subForm.name || !selectedCatId) return;
-    await fetch('/api/subcategories', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...subForm, categoryId: selectedCatId }) });
+    await fetch('/api/subcategories', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...subForm, categoryId: selectedCatId, householdId: hid }) });
     setOpenSub(false); resetSubForm(); triggerRefresh();
   };
 
