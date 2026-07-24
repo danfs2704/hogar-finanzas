@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicehash/nicehash-tauri-v2/main/core/tauri-config-schema/schema.json",
   "productName": "Hogar Finanzas",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "identifier": "com.hogarfinanzas.app",
   "build": {
     "beforeDevCommand": "npm run dev",

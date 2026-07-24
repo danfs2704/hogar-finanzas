@@ -6,13 +6,9 @@
     </linearGradient>
   </defs>
   <rect width="512" height="512" rx="96" fill="url(#bg)"/>
-  <!-- House shape -->
   <path d="M256 100 L400 220 L400 400 L320 400 L320 300 L192 300 L192 400 L112 400 L112 220 Z"
         fill="white" opacity="0.95"/>
-  <!-- Door -->
   <rect x="224" y="320" width="64" height="80" rx="4" fill="url(#bg)"/>
-  <!-- Dollar sign inside house -->
   <text x="256" y="260" text-anchor="middle" font-family="Arial, sans-serif"
         font-size="72" font-weight="bold" fill="url(#bg)">$</text>
 </svg>
-}
