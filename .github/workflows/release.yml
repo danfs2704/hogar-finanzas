@@ -133,3 +133,4 @@ jobs:
             src-tauri/target/release/bundle/msi/*.msi
           draft: false
           prerelease: false
+
