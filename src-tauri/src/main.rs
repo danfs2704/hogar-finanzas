@@ -8,6 +8,11 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use tauri::Manager;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 struct ServerHandle(Mutex<Option<Child>>);
 
 impl Drop for ServerHandle {
@@ -48,9 +53,6 @@ fn wait_for_server(port: u16, max_seconds: u64) -> bool {
 }
 
 fn get_db_url() -> String {
-    if let Ok(p) = std::env::var("DB_PATH") {
-        return format!("file:{}", p);
-    }
     if let Some(data_dir) = dirs::data_dir() {
         let app_dir = data_dir.join("HogarFinanzas");
         let _ = std::fs::create_dir_all(&app_dir);
@@ -83,41 +85,42 @@ fn main() {
             write_log(&format!("Server dir: {}", server_dir.display()));
             write_log(&format!("DB: {}", db_url));
 
-            let child = Command::new(&node_exe)
-                .arg("server.js")
+            let mut cmd = Command::new(&node_exe);
+            cmd.arg("server.js")
                 .env("PORT", port.to_string())
                 .env("HOSTNAME", "127.0.0.1")
                 .env("NODE_ENV", "production")
                 .env("DATABASE_URL", &db_url)
                 .current_dir(&server_dir)
                 .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .spawn();
+                .stderr(Stdio::piped());
 
-            match child {
+            #[cfg(target_os = "windows")]
+            {
+                cmd.creation_flags(CREATE_NO_WINDOW);
+            }
+
+            match cmd.spawn() {
                 Ok(child) => {
                     *app.state::<ServerHandle>().0.lock().unwrap() = Some(child);
-                    write_log("Node.js server process started");
+                    write_log("Node.js server started (hidden window)");
 
-                    // Run server wait in background thread so window stays responsive
                     let window = app.get_webview_window("main").unwrap().clone();
-                    let app_handle = app.handle().clone();
                     std::thread::spawn(move || {
                         write_log("Waiting for server...");
                         if wait_for_server(port, 30) {
-                            write_log("Server ready! Navigating...");
+                            write_log("Server ready!");
                             let url = format!("http://127.0.0.1:{}", port);
                             let _ = window.navigate(tauri::Url::parse(&url).unwrap());
                         } else {
-                            write_log("ERROR: Server did not start within 30 seconds");
+                            write_log("ERROR: Server did not start in 30s");
                         }
                     });
                 }
                 Err(e) => {
-                    write_log(&format!("FATAL: Failed to start server: {}", e));
+                    write_log(&format!("FATAL: {}", e));
                 }
             }
-
             Ok(())
         })
         .run(tauri::generate_context!())
