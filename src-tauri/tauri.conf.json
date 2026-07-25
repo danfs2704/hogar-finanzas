@@ -1,0 +1,54 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicehash/nicehash-tauri-v2/main/core/tauri-config-schema/schema.json",
+  "productName": "Hogar Finanzas",
+  "version": "0.3.0",
+  "identifier": "com.hogarfinanzas.app",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:3000",
+    "beforeBuildCommand": "npm run build:tauri",
+    "frontendDist": "../.next/standalone"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Hogar Finanzas",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 900,
+        "minHeight": 600,
+        "center": true,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' http://localhost:* ws://localhost:*"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["msi", "nsis"],
+    "icon": [
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
+    "resources": [
+      "server/**/*",
+      "node-runtime/**/*"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "displayLanguageSelector": false,
+        "installerIcon": "icons/icon.ico",
+        "headerImage": "",
+        "sidebarImage": "",
+        "installerLanguages": ["Spanish", "English"]
+      },
+      "msi": {
+        "installMode": "currentUser",
+        "languages": ["es", "en"]
+      }
+    }
+  }
+}

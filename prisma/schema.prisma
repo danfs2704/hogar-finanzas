@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Household {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users           User[]
+  accounts        Account[]
+  members         HouseholdMember[]
+  pets            Pet[]
+  categories      Category[]
+  transactions    Transaction[]
+}
+
+model User {
+  id          String   @id @default(cuid())
+  email       String
+  password    String
+  name        String
+  role        String   @default("member")
+  isActive    Boolean  @default(true)
+  householdId String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  household    Household     @relation(fields: [householdId], references: [id])
+  transactions Transaction[]
+
+  @@unique([email, householdId])
+}
+
+model HouseholdMember {
+  id          String   @id @default(cuid())
+  name        String
+  isMinor     Boolean  @default(false)
+  avatar      String?
+  notes       String?
+  householdId String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  household    Household     @relation(fields: [householdId], references: [id])
+  transactions Transaction[]
+}
+
+model Pet {
+  id          String   @id @default(cuid())
+  name        String
+  species     String   @default("Perro")
+  breed       String?
+  avatar      String?
+  notes       String?
+  householdId String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  household    Household     @relation(fields: [householdId], references: [id])
+  transactions Transaction[]
+}
+
+model Account {
+  id          String   @id @default(cuid())
+  name        String
+  currency    String   @default("ARS")
+  balance     Float    @default(0)
+  color       String   @default("#6366f1")
+  icon        String   @default("Wallet")
+  isActive    Boolean  @default(true)
+  householdId String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  household    Household     @relation(fields: [householdId], references: [id])
+  transactions Transaction[]
+}
+
+model Category {
+  id          String        @id @default(cuid())
+  name        String
+  type        String        @default("expense")
+  icon        String
+  color       String        @default("#6366f1")
+  isDefault   Boolean       @default(false)
+  householdId String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  household     Household     @relation(fields: [householdId], references: [id])
+  subcategories Subcategory[]
+  transactions  Transaction[]
+}
+
+model Subcategory {
+  id          String   @id @default(cuid())
+  name        String
+  icon        String
+  color       String   @default("#6366f1")
+  categoryId  String
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category     Category      @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+}
+
+model Transaction {
+  id              String           @id @default(cuid())
+  type            String           @default("expense")
+  amount          Float
+  description     String
+  date            DateTime         @default(now())
+  notes           String?
+  householdId     String
+
+  accountId       String
+  categoryId      String
+  subcategoryId   String?
+  memberId        String?
+  petId           String?
+  userId          String?
+
+  household       Household        @relation(fields: [householdId], references: [id])
+  account         Account          @relation(fields: [accountId], references: [id])
+  category        Category         @relation(fields: [categoryId], references: [id])
+  subcategory     Subcategory?     @relation(fields: [subcategoryId], references: [id])
+  member          HouseholdMember? @relation(fields: [memberId], references: [id])
+  pet             Pet?             @relation(fields: [petId], references: [id])
+  user            User?            @relation(fields: [userId], references: [id])
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
