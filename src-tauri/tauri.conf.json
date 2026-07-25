@@ -6,7 +6,7 @@
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:3000",
     "beforeBuildCommand": "",
-    "frontendDist": ""
+    "frontendDist": "../spa"
   },
   "app": {
     "windows": [
