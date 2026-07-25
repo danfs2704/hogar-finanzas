@@ -1,5 +1,4 @@
 {
-  "$schema": "https://raw.githubusercontent.com/nicehash/nicehash-tauri-v2/main/core/tauri-config-schema/schema.json",
   "productName": "Hogar Finanzas",
   "version": "0.3.0",
   "identifier": "com.hogarfinanzas.app",
@@ -39,15 +38,7 @@
     "windows": {
       "nsis": {
         "installMode": "currentUser",
-        "displayLanguageSelector": false,
-        "installerIcon": "icons/icon.ico",
-        "headerImage": "",
-        "sidebarImage": "",
-        "installerLanguages": ["Spanish", "English"]
-      },
-      "msi": {
-        "installMode": "currentUser",
-        "languages": ["es", "en"]
+        "languages": ["Spanish", "English"]
       }
     }
   }
