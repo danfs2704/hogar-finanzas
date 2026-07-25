@@ -1,12 +1,12 @@
 {
   "productName": "Hogar Finanzas",
   "version": "0.3.0",
-  "identifier": "com.hogarfinanzas.app",
+  "identifier": "com.hogarfinanzas.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:3000",
-    "beforeBuildCommand": "npm run build:tauri",
-    "frontendDist": "../.next/standalone"
+    "beforeBuildCommand": "",
+    "frontendDist": ""
   },
   "app": {
     "windows": [
