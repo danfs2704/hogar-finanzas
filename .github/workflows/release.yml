@@ -44,7 +44,7 @@ jobs:
 
       # --- Step 3: Install Rust and Tauri CLI ---
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@stable  # fixed
 
       - name: Install Tauri CLI
         run: cargo install tauri-cli --version "^2"
