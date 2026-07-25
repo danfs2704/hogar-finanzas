@@ -5,11 +5,9 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version (ej: 0.3.0)'
-        required: false
-        default: '0.3.0'
+
+permissions:
+  contents: write
 
 jobs:
   build-windows:
@@ -67,31 +65,10 @@ jobs:
           DATABASE_URL: "file:./data.db"
           NODE_ENV: production
 
-      - name: Get version
-        id: version
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-          else
-            echo "VERSION=${{ inputs.version }}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Upload release
-        uses: softprops/action-gh-release@v2
+      - name: Upload installers as artifacts
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: v${{ steps.version.outputs.VERSION }}
-          name: Hogar Finanzas v${{ steps.version.outputs.VERSION }}
-          body: |
-            ## Instalador Windows
-            - **NSIS (.exe)**: Recomendado
-            - **MSI (.msi)**: Alternativa
-            ### Instrucciones
-            1. Descargá el .exe
-            2. Ejecutalo e instalá
-            3. La base de datos se crea en AppData\Roaming\HogarFinanzas\data.db
-          files: |
+          name: windows-installer
+          path: |
             src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/release/bundle/msi/*.msi
-          draft: false
-          prerelease: false
