@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use tauri::Manager;
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use std::net::TcpStream;
