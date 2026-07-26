@@ -103,7 +103,7 @@ export default function TransactionsView() {
       if (!form.amount || !form.description || !form.accountId || !form.categoryId) return;
     }
     const parsedAmount = parseLatam(form.amount);
-    await fetch('/api/transactions', {
+    const res = await fetch('/api/transactions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -116,6 +116,11 @@ export default function TransactionsView() {
         householdId: hid,
       }),
     });
+    if (!res.ok) {
+      const data = await res.json();
+      alert(data.error || 'Error al crear transacción');
+      return;
+    }
     setOpen(false);
     setForm({ type: 'expense', amount: '', description: '', date: new Date().toISOString().split('T')[0], notes: '', accountId: '', toAccountId: '', categoryId: '', subcategoryId: '', memberId: '', petId: '' });
     triggerRefresh();

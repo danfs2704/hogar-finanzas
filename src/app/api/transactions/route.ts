@@ -58,15 +58,19 @@ export async function POST(request: NextRequest) {
     if (type === 'transfer') {
       if (!accountId || !toAccountId) return NextResponse.json({ error: 'Cuentas de origen y destino son requeridas' }, { status: 400 });
       if (accountId === toAccountId) return NextResponse.json({ error: 'Las cuentas deben ser diferentes' }, { status: 400 });
+      if (parsedAmount <= 0) return NextResponse.json({ error: 'El monto debe ser mayor a 0' }, { status: 400 });
 
-      // Debit from source
+      // Check source balance
       const fromAccount = await db.account.findUnique({ where: { id: accountId } });
       if (!fromAccount) return NextResponse.json({ error: 'Cuenta de origen no encontrada' }, { status: 404 });
-      await db.account.update({ where: { id: accountId }, data: { balance: fromAccount.balance - parsedAmount } });
+      if (fromAccount.balance < parsedAmount) {
+        return NextResponse.json({ error: `Saldo insuficiente en ${fromAccount.name}. Saldo actual: $${fromAccount.balance.toLocaleString('es-AR', { minimumFractionDigits: 2 })}` }, { status: 400 });
+      }
 
-      // Credit to destination
       const toAccount = await db.account.findUnique({ where: { id: toAccountId } });
       if (!toAccount) return NextResponse.json({ error: 'Cuenta de destino no encontrada' }, { status: 404 });
+
+      await db.account.update({ where: { id: accountId }, data: { balance: fromAccount.balance - parsedAmount } });
       await db.account.update({ where: { id: toAccountId }, data: { balance: toAccount.balance + parsedAmount } });
 
       const transaction = await db.transaction.create({
@@ -85,6 +89,15 @@ export async function POST(request: NextRequest) {
 
     // Normal income/expense
     if (!categoryId) return NextResponse.json({ error: 'Categoría requerida' }, { status: 400 });
+    if (parsedAmount <= 0) return NextResponse.json({ error: 'El monto debe ser mayor a 0' }, { status: 400 });
+
+    // For expenses, check balance
+    if (type === 'expense' || !type) {
+      const account = await db.account.findUnique({ where: { id: accountId } });
+      if (account && account.balance < parsedAmount) {
+        return NextResponse.json({ error: `Saldo insuficiente en ${account.name}. Saldo actual: $${account.balance.toLocaleString('es-AR', { minimumFractionDigits: 2 })}` }, { status: 400 });
+      }
+    }
 
     const transaction = await db.transaction.create({
       data: {
