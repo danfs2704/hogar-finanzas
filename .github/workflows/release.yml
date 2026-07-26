@@ -6,9 +6,6 @@ on:
       - 'v*'
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -41,13 +38,26 @@ jobs:
           DATABASE_URL: "file:./dev.db"
           NODE_ENV: production
 
-      - name: Prepare server bundle
+      - name: Copy static assets
         shell: pwsh
         run: |
           Copy-Item -Recurse -Force .next/static .next/standalone/.next/
           Copy-Item -Recurse -Force public .next/standalone/
+
+      - name: Copy Prisma engine files
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path ".next/standalone/node_modules/.prisma" | Out-Null
+          Copy-Item -Recurse -Force node_modules/.prisma .next/standalone/node_modules/.prisma/
+          Copy-Item -Recurse -Force node_modules/@prisma .next/standalone/node_modules/@prisma/
+
+      - name: Prepare Tauri server bundle
+        shell: pwsh
+        run: |
           New-Item -ItemType Directory -Force -Path src-tauri/server
           Copy-Item -Recurse -Force .next/standalone/* src-tauri/server/
+          Rename-Item -Path "src-tauri/server/server.js" -NewName "server-original.js" -ErrorAction SilentlyContinue
+          Copy-Item scripts/server-wrapper.js src-tauri/server/server.js
 
       - name: Download Node.js runtime
         shell: pwsh
