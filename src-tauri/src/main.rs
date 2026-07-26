@@ -61,6 +61,15 @@ fn get_db_url() -> String {
     "file:./data.db".to_string()
 }
 
+fn get_node_log_path() -> String {
+    if let Some(data_dir) = dirs::data_dir() {
+        let app_dir = data_dir.join("HogarFinanzas");
+        let _ = std::fs::create_dir_all(&app_dir);
+        return app_dir.join("node.log").to_string_lossy().to_string();
+    }
+    "node.log".to_string()
+}
+
 fn main() {
     let port: u16 = 3456;
     let server_handle = ServerHandle(Mutex::new(None));
@@ -81,9 +90,11 @@ fn main() {
             };
 
             let db_url = get_db_url();
+            let node_log = get_node_log_path();
             write_log(&format!("Node: {}", node_exe));
             write_log(&format!("Server dir: {}", server_dir.display()));
             write_log(&format!("DB: {}", db_url));
+            write_log(&format!("Node log: {}", node_log));
 
             let mut cmd = Command::new(&node_exe);
             cmd.arg("server.js")
@@ -91,6 +102,7 @@ fn main() {
                 .env("HOSTNAME", "127.0.0.1")
                 .env("NODE_ENV", "production")
                 .env("DATABASE_URL", &db_url)
+                .env("NODE_LOG", &node_log)
                 .current_dir(&server_dir)
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped());
