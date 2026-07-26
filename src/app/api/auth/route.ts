@@ -2,6 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 
+function generateUsername(name: string, householdId: string): string {
+  const base = name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // remove accents
+    .replace(/[^a-z0-9]/g, '')
+    .slice(0, 12);
+  const suffix = householdId.slice(-4).toLowerCase();
+  return `${base}_${suffix}`;
+}
+
 const EXPENSE_CATEGORIES = [
   { name: 'Alimentos', icon: 'UtensilsCrossed', color: '#f97316', subcategories: [
     { name: 'Supermercado', icon: 'ShoppingCart', color: '#f97316' },
@@ -134,10 +145,10 @@ const INCOME_CATEGORIES = [
 ];
 
 const DEFAULT_ACCOUNTS = [
-  { name: 'Efectivo (ARS)', currency: 'ARS', icon: 'Banknote', color: '#22c55e' },
-  { name: 'Cuenta Bancaria (ARS)', currency: 'ARS', icon: 'Landmark', color: '#3b82f6' },
-  { name: 'Efectivo (USD)', currency: 'USD', icon: 'DollarSign', color: '#10b981' },
-  { name: 'Cuenta Bancaria (USD)', currency: 'USD', icon: 'PiggyBank', color: '#8b5cf6' },
+  { name: 'Efectivo (ARS)', type: 'cash', currency: 'ARS', icon: 'Banknote', color: '#22c55e' },
+  { name: 'Cuenta Bancaria (ARS)', type: 'bank', currency: 'ARS', icon: 'Landmark', color: '#3b82f6' },
+  { name: 'Efectivo (USD)', type: 'cash', currency: 'USD', icon: 'DollarSign', color: '#10b981' },
+  { name: 'Cuenta Bancaria (USD)', type: 'bank', currency: 'USD', icon: 'PiggyBank', color: '#8b5cf6' },
 ];
 
 async function seedCategoriesForHousehold(householdId: string) {
@@ -162,13 +173,17 @@ async function seedCategoriesForHousehold(householdId: string) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { action, email, password, name, householdId, userId } = body;
+    const { action, email, username, password, name, householdId, userId } = body;
 
     // LOGIN
     if (action === 'login') {
-      if (!email || !password) return NextResponse.json({ error: 'Email y contraseña son requeridos' }, { status: 400 });
+      const loginId = username || email;
+      if (!loginId || !password) return NextResponse.json({ error: 'Usuario/email y contraseña son requeridos' }, { status: 400 });
+
       const user = await db.user.findFirst({
-        where: { email },
+        where: username
+          ? { username, householdId: { not: undefined } }
+          : { email: loginId },
         include: { household: { select: { id: true, name: true } } },
       });
       if (!user) return NextResponse.json({ error: 'Credenciales inválidas' }, { status: 401 });
@@ -176,7 +191,7 @@ export async function POST(request: NextRequest) {
       if (!valid) return NextResponse.json({ error: 'Credenciales inválidas' }, { status: 401 });
       if (!user.isActive) return NextResponse.json({ error: 'Tu cuenta fue desactivada. Contactá al administrador.' }, { status: 403 });
       return NextResponse.json({
-        id: user.id, email: user.email, name: user.name,
+        id: user.id, email: user.email, username: user.username, name: user.name,
         role: user.role, householdId: user.householdId,
         householdName: user.household.name,
       });
@@ -184,50 +199,73 @@ export async function POST(request: NextRequest) {
 
     // REGISTER — first user creates a household, or join existing
     if (action === 'register') {
-      if (!email || !password || !name) return NextResponse.json({ error: 'Todos los campos son requeridos' }, { status: 400 });
+      if (!password || !name) return NextResponse.json({ error: 'Nombre y contraseña son requeridos' }, { status: 400 });
       if (password.length < 6) return NextResponse.json({ error: 'La contraseña debe tener al menos 6 caracteres' }, { status: 400 });
 
       if (householdId) {
         // Join existing household
         const household = await db.household.findUnique({ where: { id: householdId } });
         if (!household) return NextResponse.json({ error: 'Hogar no encontrado. Verificá el código.' }, { status: 404 });
-        const existing = await db.user.findFirst({ where: { email, householdId } });
-        if (existing) return NextResponse.json({ error: 'Este email ya está registrado en este hogar' }, { status: 400 });
+
+        // Check uniqueness: username must be unique within household
+        let finalUsername = username || generateUsername(name, householdId);
+        const existingUname = await db.user.findFirst({ where: { username: finalUsername, householdId } });
+        if (existingUname) {
+          finalUsername = `${finalUsername}_${Date.now().toString(36).slice(-4)}`;
+        }
+
+        // If email provided, check it's not already used in this household
+        if (email) {
+          const existing = await db.user.findFirst({ where: { email, householdId } });
+          if (existing) return NextResponse.json({ error: 'Este email ya está registrado en este hogar' }, { status: 400 });
+        }
+
         const hashed = await bcrypt.hash(password, 10);
         const user = await db.user.create({
-          data: { email, password: hashed, name, role: 'member', householdId },
+          data: { email: email || null, username: finalUsername, password: hashed, name, role: 'member', householdId },
         });
-        return NextResponse.json({ id: user.id, email: user.email, name: user.name, role: user.role, householdId, householdName: household.name });
+        return NextResponse.json({ id: user.id, email: user.email, username: user.username, name: user.name, role: user.role, householdId, householdName: household.name });
       }
 
       // Create new household
-      const existingGlobal = await db.user.findFirst({ where: { email } });
-      if (existingGlobal) return NextResponse.json({ error: 'Este email ya está registrado en otro hogar' }, { status: 400 });
+      if (email) {
+        const existingGlobal = await db.user.findFirst({ where: { email } });
+        if (existingGlobal) return NextResponse.json({ error: 'Este email ya está registrado en otro hogar' }, { status: 400 });
+      }
+
       const hashed = await bcrypt.hash(password, 10);
       const household = await db.household.create({
         data: {
           name: `Hogar de ${name}`,
-          users: { create: { email, password: hashed, name, role: 'admin' } },
+          users: { create: { email: email || null, username: '_pending', password: hashed, name, role: 'admin' } },
           accounts: { create: DEFAULT_ACCOUNTS },
         },
         include: { users: true },
       });
 
+      // Set proper username now that we have the householdId
+      const user = household.users[0];
+      const finalUsername = username || generateUsername(name, household.id);
+      await db.user.update({ where: { id: user.id }, data: { username: finalUsername } });
+
       // Seed default categories for the new household
       await seedCategoriesForHousehold(household.id);
 
-      const user = household.users[0];
-      return NextResponse.json({ id: user.id, email: user.email, name: user.name, role: user.role, householdId: household.id, householdName: household.name });
+      return NextResponse.json({ id: user.id, email: user.email, username: finalUsername, name: user.name, role: user.role, householdId: household.id, householdName: household.name });
     }
 
-    // FORGOT PASSWORD — returns admin email so user can contact them
+    // FORGOT PASSWORD
     if (action === 'forgot') {
-      if (!email) return NextResponse.json({ error: 'Email requerido' }, { status: 400 });
+      const forgotId = username || email;
+      if (!forgotId) return NextResponse.json({ error: 'Usuario o email requerido' }, { status: 400 });
+
       const user = await db.user.findFirst({
-        where: { email },
+        where: username
+          ? { username, householdId: { not: undefined } }
+          : { email: forgotId },
         include: { household: { select: { id: true, name: true } } },
       });
-      if (!user) return NextResponse.json({ error: 'Email no registrado' }, { status: 404 });
+      if (!user) return NextResponse.json({ error: 'Usuario/email no registrado' }, { status: 404 });
       const admins = await db.user.findMany({ where: { householdId: user.householdId, role: 'admin', isActive: true } });
       return NextResponse.json({
         message: 'Contactá al administrador de tu hogar para restablecer tu contraseña.',

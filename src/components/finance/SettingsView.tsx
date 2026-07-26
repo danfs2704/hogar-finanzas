@@ -213,7 +213,7 @@ export default function SettingsView() {
                   {user?.role === 'admin' ? 'Admin' : 'Miembro'}
                 </Badge>
               </div>
-              <p className="text-slate-500 text-sm">{user?.email}</p>
+              <p className="text-slate-500 text-sm">@{user?.username}{user?.email ? ` · ${user.email}` : ''}</p>
               <p className="text-slate-400 text-xs mt-1">Hogar: {user?.householdName || household?.name || '—'}</p>
             </div>
           </div>

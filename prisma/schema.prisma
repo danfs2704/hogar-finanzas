@@ -24,7 +24,8 @@ model Household {
 
 model User {
   id          String   @id @default(cuid())
-  email       String
+  email       String?
+  username    String
   password    String
   name        String
   role        String   @default("member")
@@ -36,7 +37,7 @@ model User {
   household    Household     @relation(fields: [householdId], references: [id])
   transactions Transaction[]
 
-  @@unique([email, householdId])
+  @@unique([username, householdId])
 }
 
 model HouseholdMember {
@@ -71,6 +72,7 @@ model Pet {
 model Account {
   id          String   @id @default(cuid())
   name        String
+  type        String   @default("bank")
   currency    String   @default("ARS")
   balance     Float    @default(0)
   color       String   @default("#6366f1")
@@ -81,7 +83,8 @@ model Account {
   updatedAt   DateTime @updatedAt
 
   household    Household     @relation(fields: [householdId], references: [id])
-  transactions Transaction[]
+  transactionsFrom Transaction[] @relation("TxFromAccount")
+  transactionsTo   Transaction[] @relation("TxToAccount")
 }
 
 model Category {
@@ -124,15 +127,17 @@ model Transaction {
   householdId     String
 
   accountId       String
-  categoryId      String
+  toAccountId     String?
+  categoryId      String?
   subcategoryId   String?
   memberId        String?
   petId           String?
   userId          String?
 
   household       Household        @relation(fields: [householdId], references: [id])
-  account         Account          @relation(fields: [accountId], references: [id])
-  category        Category         @relation(fields: [categoryId], references: [id])
+  account         Account          @relation("TxFromAccount", fields: [accountId], references: [id])
+  toAccount       Account?         @relation("TxToAccount", fields: [toAccountId], references: [id])
+  category        Category?        @relation(fields: [categoryId], references: [id])
   subcategory     Subcategory?     @relation(fields: [subcategoryId], references: [id])
   member          HouseholdMember? @relation(fields: [memberId], references: [id])
   pet             Pet?             @relation(fields: [petId], references: [id])

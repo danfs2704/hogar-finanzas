@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DynamicIcon } from '@/lib/icons';
 import { useAppStore } from '@/store/useAppStore';
+import { formatCurrencyARS, formatCurrencyUSD } from '@/lib/format';
 import type { Account, Transaction, AnalyticsData } from '@/types';
-import { BarChart3, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 
 export default function DashboardView() {
   const { triggerRefresh, refreshKey, user } = useAppStore();
@@ -32,9 +33,6 @@ export default function DashboardView() {
   const totalUSD = accounts.filter(a => a.currency === 'USD').reduce((s, a) => s + a.balance, 0);
   const currentMonth = analytics?.monthlyTrend?.[analytics.monthlyTrend.length - 1];
 
-  const fmtARS = (n: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n);
-  const fmtUSD = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(n);
-
   return (
     <div className="space-y-6">
       <div>
@@ -52,7 +50,7 @@ export default function DashboardView() {
                 <DynamicIcon name="Banknote" className="w-4 h-4 text-white" />
               </div>
             </div>
-            <p className="text-2xl font-bold text-emerald-800">{fmtARS(totalARS)}</p>
+            <p className="text-2xl font-bold text-emerald-800">{formatCurrencyARS(totalARS)}</p>
           </CardContent>
         </Card>
 
@@ -64,7 +62,7 @@ export default function DashboardView() {
                 <DynamicIcon name="DollarSign" className="w-4 h-4 text-white" />
               </div>
             </div>
-            <p className="text-2xl font-bold text-teal-800">{fmtUSD(totalUSD)}</p>
+            <p className="text-2xl font-bold text-teal-800">{formatCurrencyUSD(totalUSD)}</p>
           </CardContent>
         </Card>
 
@@ -76,7 +74,7 @@ export default function DashboardView() {
                 <TrendingUp className="w-4 h-4 text-white" />
               </div>
             </div>
-            <p className="text-2xl font-bold text-blue-800">{fmtARS(currentMonth?.income || 0)}</p>
+            <p className="text-2xl font-bold text-blue-800">{formatCurrencyARS(currentMonth?.income || 0)}</p>
           </CardContent>
         </Card>
 
@@ -88,7 +86,7 @@ export default function DashboardView() {
                 <TrendingDown className="w-4 h-4 text-white" />
               </div>
             </div>
-            <p className="text-2xl font-bold text-rose-800">{fmtARS(currentMonth?.expense || 0)}</p>
+            <p className="text-2xl font-bold text-rose-800">{formatCurrencyARS(currentMonth?.expense || 0)}</p>
           </CardContent>
         </Card>
       </div>
@@ -108,17 +106,29 @@ export default function DashboardView() {
               <div className="divide-y divide-slate-100">
                 {recentTx.map(tx => (
                   <div key={tx.id} className="px-6 py-3 flex items-center gap-3 hover:bg-slate-50/50">
-                    <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${tx.category?.color}15` }}>
-                      <DynamicIcon name={tx.category?.icon || 'CircleDot'} className="w-4 h-4" style={{ color: tx.category?.color }} />
-                    </div>
+                    {tx.type === 'transfer' ? (
+                      <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-blue-50">
+                        <DynamicIcon name="ArrowLeftRight" className="w-4 h-4 text-blue-600" />
+                      </div>
+                    ) : (
+                      <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${tx.category?.color}15` }}>
+                        <DynamicIcon name={tx.category?.icon || 'CircleDot'} className="w-4 h-4" style={{ color: tx.category?.color }} />
+                      </div>
+                    )}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-700 truncate">{tx.description}</p>
-                      <p className="text-xs text-slate-400">{tx.category?.name}{tx.subcategory ? ` · ${tx.subcategory.name}` : ''} · {new Date(tx.date).toLocaleDateString('es-AR')}</p>
+                      <p className="text-sm font-medium text-slate-700 truncate">
+                        {tx.type === 'transfer' ? `Transferencia: ${tx.account?.name} → ${tx.toAccount?.name}` : tx.description}
+                      </p>
+                      <p className="text-xs text-slate-400">{tx.type === 'transfer' ? '' : `${tx.category?.name || ''}${tx.subcategory ? ` · ${tx.subcategory.name}` : ''} · `}{new Date(tx.date).toLocaleDateString('es-AR')}</p>
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <p className={`text-sm font-semibold ${tx.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        {tx.type === 'income' ? '+' : '-'}{tx.account?.currency === 'USD' ? fmtUSD(tx.amount) : fmtARS(tx.amount)}
-                      </p>
+                      {tx.type === 'transfer' ? (
+                        <p className="text-sm font-semibold text-blue-600">{formatCurrencyARS(tx.amount)}</p>
+                      ) : (
+                        <p className={`text-sm font-semibold ${tx.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          {tx.type === 'income' ? '+' : '-'}{tx.account?.currency === 'USD' ? formatCurrencyUSD(tx.amount) : formatCurrencyARS(tx.amount)}
+                        </p>
+                      )}
                       <p className="text-xs text-slate-400">{tx.member?.name || tx.pet?.name || ''}</p>
                     </div>
                   </div>
@@ -147,7 +157,7 @@ export default function DashboardView() {
                         <DynamicIcon name={cat.categoryIcon} className="w-4 h-4" style={{ color: cat.categoryColor }} />
                         <span className="text-sm font-medium text-slate-700">{cat.categoryName}</span>
                       </div>
-                      <span className="text-sm font-semibold text-slate-800">{fmtARS(cat.total)}</span>
+                      <span className="text-sm font-semibold text-slate-800">{formatCurrencyARS(cat.total)}</span>
                     </div>
                     <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
                       <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(cat.percentage, 100)}%`, backgroundColor: cat.categoryColor }} />
@@ -175,14 +185,14 @@ export default function DashboardView() {
                   <div className="space-y-1">
                     <div className="flex items-center justify-center gap-1">
                       <ArrowUpRight className="w-3 h-3 text-emerald-500" />
-                      <span className="text-xs font-medium text-emerald-600">{fmtARS(m.income)}</span>
+                      <span className="text-xs font-medium text-emerald-600">{formatCurrencyARS(m.income)}</span>
                     </div>
                     <div className="flex items-center justify-center gap-1">
                       <ArrowDownRight className="w-3 h-3 text-rose-500" />
-                      <span className="text-xs font-medium text-rose-600">{fmtARS(m.expense)}</span>
+                      <span className="text-xs font-medium text-rose-600">{formatCurrencyARS(m.expense)}</span>
                     </div>
                     <p className={`text-xs font-bold mt-1 ${m.balance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                      {m.balance >= 0 ? '+' : ''}{fmtARS(m.balance)}
+                      {m.balance >= 0 ? '+' : ''}{formatCurrencyARS(m.balance)}
                     </p>
                   </div>
                 </div>

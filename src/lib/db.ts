@@ -17,10 +17,11 @@ const CREATE_TABLES_SQL: string[] = [
     "updatedAt" DATETIME NOT NULL
   )`,
 
-  // 2) User — @@unique([email, householdId])
+  // 2) User — @@unique([username, householdId])
   `CREATE TABLE IF NOT EXISTS "User" (
     "id" TEXT NOT NULL PRIMARY KEY,
-    "email" TEXT NOT NULL,
+    "email" TEXT,
+    "username" TEXT NOT NULL,
     "password" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "role" TEXT NOT NULL DEFAULT 'member',
@@ -31,9 +32,9 @@ const CREATE_TABLES_SQL: string[] = [
     CONSTRAINT "User_householdId_fkey" FOREIGN KEY ("householdId") REFERENCES "Household" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
   )`,
 
-  // unique index for User(email, householdId)
-  `CREATE UNIQUE INDEX IF NOT EXISTS "User_email_householdId_key"
-    ON "User" ("email", "householdId")`,
+  // unique index for User(username, householdId)
+  `CREATE UNIQUE INDEX IF NOT EXISTS "User_username_householdId_key"
+    ON "User" ("username", "householdId")`,
 
   // 3) HouseholdMember
   `CREATE TABLE IF NOT EXISTS "HouseholdMember" (
@@ -62,10 +63,11 @@ const CREATE_TABLES_SQL: string[] = [
     CONSTRAINT "Pet_householdId_fkey" FOREIGN KEY ("householdId") REFERENCES "Household" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
   )`,
 
-  // 5) Account
+  // 5) Account (with type column)
   `CREATE TABLE IF NOT EXISTS "Account" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "name" TEXT NOT NULL,
+    "type" TEXT NOT NULL DEFAULT 'bank',
     "currency" TEXT NOT NULL DEFAULT 'ARS',
     "balance" REAL NOT NULL DEFAULT 0,
     "color" TEXT NOT NULL DEFAULT '#6366f1',
@@ -77,13 +79,14 @@ const CREATE_TABLES_SQL: string[] = [
     CONSTRAINT "Account_householdId_fkey" FOREIGN KEY ("householdId") REFERENCES "Household" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
   )`,
 
-  // 6) Category
+  // 6) Category (with description)
   `CREATE TABLE IF NOT EXISTS "Category" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "name" TEXT NOT NULL,
     "type" TEXT NOT NULL DEFAULT 'expense',
     "icon" TEXT NOT NULL,
     "color" TEXT NOT NULL DEFAULT '#6366f1',
+    "description" TEXT,
     "isDefault" BOOLEAN NOT NULL DEFAULT 0,
     "householdId" TEXT NOT NULL,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -91,12 +94,13 @@ const CREATE_TABLES_SQL: string[] = [
     CONSTRAINT "Category_householdId_fkey" FOREIGN KEY ("householdId") REFERENCES "Household" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
   )`,
 
-  // 7) Subcategory — onDelete: Cascade
+  // 7) Subcategory (with description)
   `CREATE TABLE IF NOT EXISTS "Subcategory" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "name" TEXT NOT NULL,
     "icon" TEXT NOT NULL,
     "color" TEXT NOT NULL DEFAULT '#6366f1',
+    "description" TEXT,
     "categoryId" TEXT NOT NULL,
     "isDefault" BOOLEAN NOT NULL DEFAULT 0,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -104,7 +108,7 @@ const CREATE_TABLES_SQL: string[] = [
     CONSTRAINT "Subcategory_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "Category" ("id") ON DELETE CASCADE ON UPDATE CASCADE
   )`,
 
-  // 8) Transaction
+  // 8) Transaction (with toAccountId, categoryId nullable for transfers)
   `CREATE TABLE IF NOT EXISTS "Transaction" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "type" TEXT NOT NULL DEFAULT 'expense',
@@ -114,7 +118,8 @@ const CREATE_TABLES_SQL: string[] = [
     "notes" TEXT,
     "householdId" TEXT NOT NULL,
     "accountId" TEXT NOT NULL,
-    "categoryId" TEXT NOT NULL,
+    "toAccountId" TEXT,
+    "categoryId" TEXT,
     "subcategoryId" TEXT,
     "memberId" TEXT,
     "petId" TEXT,
@@ -123,12 +128,41 @@ const CREATE_TABLES_SQL: string[] = [
     "updatedAt" DATETIME NOT NULL,
     CONSTRAINT "Transaction_householdId_fkey" FOREIGN KEY ("householdId") REFERENCES "Household" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "Transaction_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "Transaction_toAccountId_fkey" FOREIGN KEY ("toAccountId") REFERENCES "Account" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "Transaction_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "Category" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "Transaction_subcategoryId_fkey" FOREIGN KEY ("subcategoryId") REFERENCES "Subcategory" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT "Transaction_memberId_fkey" FOREIGN KEY ("memberId") REFERENCES "HouseholdMember" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT "Transaction_petId_fkey" FOREIGN KEY ("petId") REFERENCES "Pet" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT "Transaction_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
   )`,
+]
+
+// Migration statements — safe to run repeatedly, only add columns/indices if missing.
+const MIGRATION_SQL: string[] = [
+  // User: add username column if missing
+  `ALTER TABLE "User" ADD COLUMN "username" TEXT`,
+  // Populate username from email for existing users
+  `UPDATE "User" SET "username" = REPLACE(REPLACE("email", '@', '_'), '.', '_') WHERE "username" IS NULL OR "username" = ''`,
+  // Make username NOT NULL after migration
+  `UPDATE "User" SET "username" = 'usuario_' || SUBSTR("id", 1, 8) WHERE "username" IS NULL OR "username" = ''`,
+  // Drop old email+householdId unique index if exists, create new username one
+  `DROP INDEX IF EXISTS "User_email_householdId_key"`,
+  // Make email nullable (SQLite doesn't ALTER COLUMN, but new schema handles it)
+
+  // Account: add type column if missing
+  `ALTER TABLE "Account" ADD COLUMN "type" TEXT NOT NULL DEFAULT 'bank'`,
+
+  // Category: add description column if missing
+  `ALTER TABLE "Category" ADD COLUMN "description" TEXT`,
+
+  // Subcategory: add description column if missing
+  `ALTER TABLE "Subcategory" ADD COLUMN "description" TEXT`,
+
+  // Transaction: add toAccountId column if missing
+  `ALTER TABLE "Transaction" ADD COLUMN "toAccountId" TEXT`,
+
+  // Add foreign key index for toAccountId
+  `CREATE INDEX IF NOT EXISTS "Transaction_toAccountId_idx" ON "Transaction" ("toAccountId")`,
 ]
 
 async function ensureSchema(prisma: PrismaClient) {
@@ -138,6 +172,14 @@ async function ensureSchema(prisma: PrismaClient) {
     await prisma.$executeRawUnsafe('PRAGMA foreign_keys = ON;')
     for (const sql of CREATE_TABLES_SQL) {
       await prisma.$executeRawUnsafe(sql)
+    }
+    // Run migrations — each is wrapped individually so one failure doesn't block others
+    for (const sql of MIGRATION_SQL) {
+      try {
+        await prisma.$executeRawUnsafe(sql)
+      } catch {
+        // Column or index may already exist — that's fine
+      }
     }
     globalForPrisma.__prismaInitialized = true
     // eslint-disable-next-line no-console

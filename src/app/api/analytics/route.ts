@@ -22,10 +22,11 @@ export async function GET(request: NextRequest) {
 
     // Category breakdown
     const transactions = await db.transaction.findMany({ where: { date: { gte: new Date(now.getFullYear(), now.getMonth(), 1).toISOString(), lt: new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString() }, householdId }, include: { category: true, subcategory: true } });
-    const expenseTx = transactions.filter(t => t.type === 'expense');
+    const expenseTx = transactions.filter(t => t.type === 'expense' && t.categoryId);
     const totalExpense = expenseTx.reduce((s, t) => s + t.amount, 0);
     const catMap = new Map<string, { cat: typeof expenseTx[0]['category']; subs: { sub: typeof expenseTx[0]['subcategory']; total: number }[]; total: number }>();
     for (const t of expenseTx) {
+      if (!t.categoryId || !t.category) continue;
       if (!catMap.has(t.categoryId)) catMap.set(t.categoryId, { cat: t.category, subs: [], total: 0 });
       const e = catMap.get(t.categoryId)!; e.total += t.amount;
       if (t.subcategory) { const ex = e.subs.find(s => s.sub?.id === t.subcategory!.id); if (ex) ex.total += t.amount; else e.subs.push({ sub: t.subcategory, total: t.amount }); }
@@ -53,11 +54,11 @@ export async function GET(request: NextRequest) {
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString();
     const accounts = await db.account.findMany({
       where: { householdId },
-      include: { transactions: { where: { date: { gte: monthStart, lt: monthEnd } } } },
+      include: { transactionsFrom: { where: { date: { gte: monthStart, lt: monthEnd } } } },
     });
     const accountSummary = accounts.map(a => {
-      const income = a.transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-      const expense = a.transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+      const income = a.transactionsFrom.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+      const expense = a.transactionsFrom.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
       return { accountId: a.id, accountName: a.name, currency: a.currency, balance: a.balance, income, expense };
     });
 

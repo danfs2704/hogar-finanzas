@@ -14,7 +14,8 @@ import { useAppStore } from '@/store/useAppStore';
 
 interface UserRow {
   id: string;
-  email: string;
+  email: string | null;
+  username: string;
   name: string;
   role: 'admin' | 'member';
   isActive: boolean;
@@ -32,7 +33,7 @@ export default function UsersView() {
   const [resetOpen, setResetOpen] = useState(false);
   const [editing, setEditing] = useState<UserRow | null>(null);
   const [resetting, setResetting] = useState<UserRow | null>(null);
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'member' as 'admin' | 'member' });
+  const [form, setForm] = useState({ name: '', username: '', email: '', password: '', role: 'member' as 'admin' | 'member' });
   const [editForm, setEditForm] = useState({ name: '', role: 'admin' as 'admin' | 'member', isActive: true });
   const [resetPw, setResetPw] = useState('');
   const [loading, setLoading] = useState(false);
@@ -46,7 +47,7 @@ export default function UsersView() {
   }, [householdId, refreshKey]);
 
   const resetForm = () => {
-    setForm({ name: '', email: '', password: '', role: 'member' });
+    setForm({ name: '', username: '', email: '', password: '', role: 'member' });
     setEditForm({ name: '', role: 'admin', isActive: true });
     setResetPw('');
     setMsg(null);
@@ -55,12 +56,12 @@ export default function UsersView() {
   };
 
   const handleCreate = () => {
-    if (!form.name || !form.email || !form.password || !householdId) return;
+    if (!form.name || !form.password || !householdId) return;
     setLoading(true);
     fetch('/api/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, householdId }),
+      body: JSON.stringify({ name: form.name, username: form.username || undefined, email: form.email || undefined, password: form.password, role: form.role, householdId }),
     }).then(r => {
       if (r.ok) {
         setOpen(false);
@@ -156,15 +157,19 @@ export default function UsersView() {
             </DialogHeader>
             <div className="space-y-4 mt-2">
               <div className="space-y-2">
-                <Label>Nombre</Label>
+                <Label>Nombre *</Label>
                 <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Nombre completo" />
               </div>
               <div className="space-y-2">
-                <Label>Email</Label>
+                <Label>Usuario (opcional)</Label>
+                <Input value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} placeholder="Se genera automáticamente" />
+              </div>
+              <div className="space-y-2">
+                <Label>Email (opcional)</Label>
                 <Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="correo@ejemplo.com" />
               </div>
               <div className="space-y-2">
-                <Label>Contraseña</Label>
+                <Label>Contraseña *</Label>
                 <Input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder="Mínimo 6 caracteres" />
               </div>
               <div className="space-y-2">
@@ -177,7 +182,7 @@ export default function UsersView() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button className="w-full bg-emerald-600 hover:bg-emerald-700" onClick={handleCreate} disabled={loading || !form.name || !form.email || !form.password}>
+              <Button className="w-full bg-emerald-600 hover:bg-emerald-700" onClick={handleCreate} disabled={loading || !form.name || !form.password}>
                 {loading ? 'Creando...' : 'Crear Usuario'}
               </Button>
             </div>
@@ -207,10 +212,13 @@ export default function UsersView() {
                       <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-white text-sm ${u.role === 'admin' ? 'bg-emerald-500' : 'bg-slate-500'}`}>
                         {u.name.charAt(0).toUpperCase()}
                       </div>
-                      <span className="font-medium text-slate-800">{u.name}</span>
+                      <div>
+                        <span className="font-medium text-slate-800">{u.name}</span>
+                        <p className="text-xs text-slate-400">@{u.username}</p>
+                      </div>
                     </div>
                   </TableCell>
-                  <TableCell className="text-slate-500">{u.email}</TableCell>
+                  <TableCell className="text-slate-500 text-sm">{u.email || <span className="text-slate-300 italic">sin email</span>}</TableCell>
                   <TableCell>
                     <span className={`text-xs px-2 py-0.5 rounded-full ${u.role === 'admin' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
                       {u.role === 'admin' ? 'Admin' : 'Miembro'}
@@ -295,7 +303,7 @@ export default function UsersView() {
           </DialogHeader>
           <div className="space-y-4 mt-2">
             <p className="text-sm text-slate-500">
-              Estás cambiando la contraseña de <span className="font-semibold text-slate-700">{resetting?.name}</span> ({resetting?.email}).
+              Estás cambiando la contraseña de <span className="font-semibold text-slate-700">{resetting?.name}</span> (@{resetting?.username}).
             </p>
             {msg && (
               <div className={`p-3 rounded-lg text-sm ${msg.type === 'ok' ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>

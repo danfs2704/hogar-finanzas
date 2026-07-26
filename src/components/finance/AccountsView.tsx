@@ -9,7 +9,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DynamicIcon, ICON_COLORS, AVAILABLE_ICONS } from '@/lib/icons';
 import { useAppStore } from '@/store/useAppStore';
-import type { Account } from '@/types';
+import { formatInputValue, parseLatam, formatCurrencyARS, formatCurrencyUSD } from '@/lib/format';
+import type { Account, AccountType } from '@/types';
+
+const ACCOUNT_TYPES: { value: AccountType; label: string; icon: string; color: string }[] = [
+  { value: 'bank', label: 'Banco', icon: 'Landmark', color: '#3b82f6' },
+  { value: 'cash', label: 'Efectivo', icon: 'Banknote', color: '#22c55e' },
+  { value: 'virtual_wallet', label: 'Monedero Virtual', icon: 'Smartphone', color: '#8b5cf6' },
+];
 
 export default function AccountsView() {
   const { triggerRefresh, refreshKey, user } = useAppStore();
@@ -17,7 +24,7 @@ export default function AccountsView() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Account | null>(null);
-  const [form, setForm] = useState({ name: '', currency: 'ARS' as 'ARS' | 'USD', balance: 0, color: '#6366f1', icon: 'Wallet' });
+  const [form, setForm] = useState({ name: '', type: 'bank' as AccountType, currency: 'ARS' as 'ARS' | 'USD', balance: '', color: '#6366f1', icon: 'Wallet' });
   const [iconSearch, setIconSearch] = useState('');
   const [showIcons, setShowIcons] = useState(false);
 
@@ -27,7 +34,7 @@ export default function AccountsView() {
   }, [refreshKey, hid]);
 
   const resetForm = () => {
-    setForm({ name: '', currency: 'ARS', balance: 0, color: '#6366f1', icon: 'Wallet' });
+    setForm({ name: '', type: 'bank', currency: 'ARS', balance: '', color: '#6366f1', icon: 'Wallet' });
     setEditing(null);
     setShowIcons(false);
     setIconSearch('');
@@ -35,10 +42,14 @@ export default function AccountsView() {
 
   const handleSave = async () => {
     if (!form.name) return;
+    const payload: Record<string, unknown> = { name: form.name, type: form.type, currency: form.currency, color: form.color, icon: form.icon, householdId: hid };
+    if (!editing) {
+      payload.balance = parseLatam(form.balance);
+    }
     if (editing) {
-      await fetch('/api/accounts', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editing.id, ...form, householdId: hid }) });
+      await fetch('/api/accounts', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editing.id, ...payload }) });
     } else {
-      await fetch('/api/accounts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, householdId: hid }) });
+      await fetch('/api/accounts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     }
     setOpen(false);
     resetForm();
@@ -47,7 +58,7 @@ export default function AccountsView() {
 
   const handleEdit = (acc: Account) => {
     setEditing(acc);
-    setForm({ name: acc.name, currency: acc.currency as 'ARS' | 'USD', balance: acc.balance, color: acc.color, icon: acc.icon });
+    setForm({ name: acc.name, type: acc.type || 'bank', currency: acc.currency as 'ARS' | 'USD', balance: formatInputValue(acc.balance.toString()), color: acc.color, icon: acc.icon });
     setOpen(true);
   };
 
@@ -57,9 +68,6 @@ export default function AccountsView() {
     triggerRefresh();
   };
 
-  const fmtARS = (n: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n);
-  const fmtUSD = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(n);
-
   const arsTotal = accounts.filter(a => a.currency === 'ARS').reduce((s, a) => s + a.balance, 0);
   const usdTotal = accounts.filter(a => a.currency === 'USD').reduce((s, a) => s + a.balance, 0);
 
@@ -67,12 +75,16 @@ export default function AccountsView() {
     ? AVAILABLE_ICONS.filter(i => i.toLowerCase().includes(iconSearch.toLowerCase()))
     : AVAILABLE_ICONS;
 
+  const getTypeLabel = (type?: string) => {
+    return ACCOUNT_TYPES.find(t => t.value === type)?.label || type || 'Banco';
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-800">Cuentas</h2>
-          <p className="text-slate-500 text-sm">Gestione sus cuentas bancarias y de efectivo</p>
+          <p className="text-slate-500 text-sm">Gestione sus cuentas bancarias, de efectivo y monederos virtuales</p>
         </div>
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
           <DialogTrigger asChild>
@@ -90,6 +102,21 @@ export default function AccountsView() {
                 <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Ej: Cuenta Nación" />
               </div>
               <div className="space-y-2">
+                <Label>Tipo de Cuenta</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {ACCOUNT_TYPES.map(t => (
+                    <button
+                      key={t.value}
+                      className={`flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 transition-all ${form.type === t.value ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 hover:border-slate-300'}`}
+                      onClick={() => setForm({ ...form, type: t.value })}
+                    >
+                      <DynamicIcon name={t.icon} className="w-5 h-5" style={{ color: t.color }} />
+                      <span className="text-xs font-medium">{t.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-2">
                 <Label>Moneda</Label>
                 <Select value={form.currency} onValueChange={v => setForm({ ...form, currency: v as 'ARS' | 'USD' })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
@@ -102,7 +129,7 @@ export default function AccountsView() {
               {!editing && (
                 <div className="space-y-2">
                   <Label>Saldo Inicial</Label>
-                  <Input type="number" value={form.balance || ''} onChange={e => setForm({ ...form, balance: parseFloat(e.target.value) || 0 })} placeholder="0" />
+                  <Input value={form.balance} onChange={e => setForm({ ...form, balance: formatInputValue(e.target.value) })} placeholder="0" className="font-mono" />
                 </div>
               )}
               <div className="space-y-2">
@@ -145,13 +172,13 @@ export default function AccountsView() {
         <Card className="border-0 shadow-sm bg-gradient-to-r from-emerald-50 to-teal-50">
           <CardContent className="p-5">
             <p className="text-sm text-emerald-700 font-medium">Total en Pesos (ARS)</p>
-            <p className="text-3xl font-bold text-emerald-800 mt-1">{fmtARS(arsTotal)}</p>
+            <p className="text-3xl font-bold text-emerald-800 mt-1">{formatCurrencyARS(arsTotal)}</p>
           </CardContent>
         </Card>
         <Card className="border-0 shadow-sm bg-gradient-to-r from-teal-50 to-cyan-50">
           <CardContent className="p-5">
             <p className="text-sm text-teal-700 font-medium">Total en Dólares (USD)</p>
-            <p className="text-3xl font-bold text-teal-800 mt-1">{fmtUSD(usdTotal)}</p>
+            <p className="text-3xl font-bold text-teal-800 mt-1">{formatCurrencyUSD(usdTotal)}</p>
           </CardContent>
         </Card>
       </div>
@@ -168,7 +195,9 @@ export default function AccountsView() {
                   </div>
                   <div>
                     <h3 className="font-semibold text-slate-800">{acc.name}</h3>
-                    <p className="text-xs text-slate-400">{acc.currency === 'ARS' ? '🇦🇷 ARS' : '🇺🇸 USD'} · {acc._count?.transactions || 0} transacciones</p>
+                    <p className="text-xs text-slate-400">
+                      {acc.currency === 'ARS' ? '🇦🇷 ARS' : '🇺🇸 USD'} · {getTypeLabel(acc.type)} · {acc._count?.transactions || 0} transacciones
+                    </p>
                   </div>
                 </div>
                 <div className="flex gap-1">
@@ -177,7 +206,7 @@ export default function AccountsView() {
                 </div>
               </div>
               <p className={`text-2xl font-bold mt-4 ${acc.currency === 'USD' ? 'text-teal-700' : 'text-emerald-700'}`}>
-                {acc.currency === 'USD' ? fmtUSD(acc.balance) : fmtARS(acc.balance)}
+                {acc.currency === 'USD' ? formatCurrencyUSD(acc.balance) : formatCurrencyARS(acc.balance)}
               </p>
             </CardContent>
           </Card>
