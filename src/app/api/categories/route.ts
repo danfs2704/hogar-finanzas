@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { db, dbReady } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
+    await dbReady;
     const { searchParams } = new URL(request.url);
     const householdId = searchParams.get('householdId');
     if (!householdId) return NextResponse.json({ error: 'householdId requerido' }, { status: 400 });

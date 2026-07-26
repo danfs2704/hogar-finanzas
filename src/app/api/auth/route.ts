@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { db, dbReady } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 
 function generateUsername(name: string, householdId: string): string {
@@ -172,6 +172,9 @@ async function seedCategoriesForHousehold(householdId: string) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Wait for schema migration to complete before any DB operation
+    await dbReady;
+
     const body = await request.json();
     const { action, email, username, password, name, householdId, userId } = body;
 

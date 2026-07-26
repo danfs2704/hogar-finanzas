@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { db, dbReady } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
+    await dbReady;
     const { searchParams } = new URL(request.url);
     const householdId = searchParams.get('householdId');
     if (!householdId) return NextResponse.json({ error: 'householdId requerido' }, { status: 400 });
@@ -46,6 +47,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    await dbReady;
     const body = await request.json();
     const { type, amount, description, date, notes, accountId, toAccountId, categoryId, subcategoryId, memberId, petId, userId, householdId } = body;
     if (!householdId) return NextResponse.json({ error: 'householdId requerido' }, { status: 400 });
@@ -109,6 +111,7 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    await dbReady;
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     if (!id) return NextResponse.json({ error: 'ID requerido' }, { status: 400 });

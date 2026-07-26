@@ -1,24 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { db, dbReady } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
+    await dbReady;
     const { searchParams } = new URL(request.url);
     const householdId = searchParams.get('householdId');
     if (!householdId) return NextResponse.json({ error: 'householdId requerido' }, { status: 400 });
 
     const now = new Date();
 
-    // Member spending
-    const members = await db.householdMember.findMany({ where: { householdId }, include: { _count: { select: { transactions: true } } } });
-    const memberSpending = await Promise.all(members.map(async (m) => {
-      const [y, mon] = [now.getFullYear(), now.getMonth() + 1];
-      const from = new Date(y, mon - 1, 1).toISOString();
-      const to = new Date(y, mon, 1).toISOString();
-      const expAgg = await db.transaction.aggregate({ where: { memberId: m.id, type: 'expense', householdId, date: { gte: from, lt: to } }, _sum: { amount: true } });
-      const incAgg = await db.transaction.aggregate({ where: { memberId: m.id, type: 'income', householdId, date: { gte: from, lt: to } }, _sum: { amount: true } });
-      return { memberId: m.id, memberName: m.name, isMinor: m.isMinor, totalExpense: expAgg._sum.amount || 0, totalIncome: incAgg._sum.amount || 0, transactions: m._count.transactions };
-    }));
+    // Member spending — gracefully handle if HouseholdMember table is empty or failing
+    let memberSpending: { memberId: string; memberName: string; isMinor: boolean; totalExpense: number; totalIncome: number; transactions: number }[] = [];
+    try {
+      const members = await db.householdMember.findMany({ where: { householdId }, include: { _count: { select: { transactions: true } } } });
+      memberSpending = await Promise.all(members.map(async (m) => {
+        const [y, mon] = [now.getFullYear(), now.getMonth() + 1];
+        const from = new Date(y, mon - 1, 1).toISOString();
+        const to = new Date(y, mon, 1).toISOString();
+        const expAgg = await db.transaction.aggregate({ where: { memberId: m.id, type: 'expense', householdId, date: { gte: from, lt: to } }, _sum: { amount: true } });
+        const incAgg = await db.transaction.aggregate({ where: { memberId: m.id, type: 'income', householdId, date: { gte: from, lt: to } }, _sum: { amount: true } });
+        return { memberId: m.id, memberName: m.name, isMinor: m.isMinor, totalExpense: expAgg._sum.amount || 0, totalIncome: incAgg._sum.amount || 0, transactions: m._count.transactions };
+      }));
+    } catch (err) {
+      console.error('[analytics] Member spending skipped:', (err as Error).message);
+    }
 
     // Category breakdown
     const transactions = await db.transaction.findMany({ where: { date: { gte: new Date(now.getFullYear(), now.getMonth(), 1).toISOString(), lt: new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString() }, householdId }, include: { category: true, subcategory: true } });

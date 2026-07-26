@@ -2,7 +2,39 @@ import { PrismaClient } from '@prisma/client'
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
-  __prismaInitialized: boolean
+  __prismaReady: Promise<void> | undefined
+}
+
+// Helper: check if a column exists in a table
+async function columnExists(prisma: PrismaClient, table: string, column: string): Promise<boolean> {
+  try {
+    const rows: { name: string }[] = await prisma.$queryRawUnsafe(
+      `SELECT name FROM pragma_table_info('${table}') WHERE name = '${column}'`
+    )
+    return rows.length > 0
+  } catch {
+    return false
+  }
+}
+
+// Helper: safely add a column only if it doesn't exist
+async function addColumnIfMissing(prisma: PrismaClient, table: string, column: string, colDef: string) {
+  if (await columnExists(prisma, table, column)) return
+  try {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" ADD COLUMN "${column}" ${colDef}`)
+    console.log(`[db] Added column ${table}.${column}`)
+  } catch (err) {
+    console.error(`[db] Failed to add column ${table}.${column}:`, err)
+  }
+}
+
+// Helper: safely drop an index if it exists
+async function dropIndexIfExists(prisma: PrismaClient, indexName: string) {
+  try {
+    await prisma.$executeRawUnsafe(`DROP INDEX IF EXISTS "${indexName}"`)
+  } catch {
+    // ignore
+  }
 }
 
 // SQLite CREATE TABLE statements matching prisma/schema.prisma.
@@ -17,7 +49,7 @@ const CREATE_TABLES_SQL: string[] = [
     "updatedAt" DATETIME NOT NULL
   )`,
 
-  // 2) User — @@unique([username, householdId])
+  // 2) User — with username
   `CREATE TABLE IF NOT EXISTS "User" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "email" TEXT,
@@ -31,10 +63,6 @@ const CREATE_TABLES_SQL: string[] = [
     "updatedAt" DATETIME NOT NULL,
     CONSTRAINT "User_householdId_fkey" FOREIGN KEY ("householdId") REFERENCES "Household" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
   )`,
-
-  // unique index for User(username, householdId)
-  `CREATE UNIQUE INDEX IF NOT EXISTS "User_username_householdId_key"
-    ON "User" ("username", "householdId")`,
 
   // 3) HouseholdMember
   `CREATE TABLE IF NOT EXISTS "HouseholdMember" (
@@ -137,72 +165,81 @@ const CREATE_TABLES_SQL: string[] = [
   )`,
 ]
 
-// Migration statements — safe to run repeatedly, only add columns/indices if missing.
-const MIGRATION_SQL: string[] = [
-  // User: add username column if missing
-  `ALTER TABLE "User" ADD COLUMN "username" TEXT`,
-  // Populate username from email for existing users
-  `UPDATE "User" SET "username" = REPLACE(REPLACE("email", '@', '_'), '.', '_') WHERE "username" IS NULL OR "username" = ''`,
-  // Make username NOT NULL after migration
-  `UPDATE "User" SET "username" = 'usuario_' || SUBSTR("id", 1, 8) WHERE "username" IS NULL OR "username" = ''`,
-  // Drop old email+householdId unique index if exists, create new username one
-  `DROP INDEX IF EXISTS "User_email_householdId_key"`,
-  // Make email nullable (SQLite doesn't ALTER COLUMN, but new schema handles it)
-
-  // Account: add type column if missing
-  `ALTER TABLE "Account" ADD COLUMN "type" TEXT NOT NULL DEFAULT 'bank'`,
-
-  // Category: add description column if missing
-  `ALTER TABLE "Category" ADD COLUMN "description" TEXT`,
-
-  // Subcategory: add description column if missing
-  `ALTER TABLE "Subcategory" ADD COLUMN "description" TEXT`,
-
-  // Transaction: add toAccountId column if missing
-  `ALTER TABLE "Transaction" ADD COLUMN "toAccountId" TEXT`,
-
-  // Add foreign key index for toAccountId
-  `CREATE INDEX IF NOT EXISTS "Transaction_toAccountId_idx" ON "Transaction" ("toAccountId")`,
-]
-
 async function ensureSchema(prisma: PrismaClient) {
-  if (globalForPrisma.__prismaInitialized) return
   try {
-    // Make sure foreign keys are honoured on every connection.
     await prisma.$executeRawUnsafe('PRAGMA foreign_keys = ON;')
+
+    // Step 1: Create all tables that don't exist yet
     for (const sql of CREATE_TABLES_SQL) {
-      await prisma.$executeRawUnsafe(sql)
-    }
-    // Run migrations — each is wrapped individually so one failure doesn't block others
-    for (const sql of MIGRATION_SQL) {
       try {
         await prisma.$executeRawUnsafe(sql)
-      } catch {
-        // Column or index may already exist — that's fine
+      } catch (err) {
+        console.error('[db] Error creating table:', (err as Error).message)
       }
     }
-    globalForPrisma.__prismaInitialized = true
-    // eslint-disable-next-line no-console
-    console.log('[db] Schema verified — all 8 tables ensured.')
+
+    // Step 2: Create unique index for User(username, householdId)
+    try {
+      await prisma.$executeRawUnsafe(`
+        CREATE UNIQUE INDEX IF NOT EXISTS "User_username_householdId_key"
+        ON "User" ("username", "householdId")
+      `)
+    } catch (err) {
+      console.error('[db] Error creating User index:', (err as Error).message)
+    }
+
+    // Step 3: Migrate existing tables — add missing columns
+    // User: add username if missing (old DBs may not have it)
+    await addColumnIfMissing(prisma, 'User', 'username', "TEXT NOT NULL DEFAULT ''")
+    // Populate username for users that don't have one
+    try {
+      await prisma.$executeRawUnsafe(`UPDATE "User" SET "username" = REPLACE(REPLACE("email", '@', '_'), '.', '_') WHERE "username" IS NULL OR "username" = ''`)
+      await prisma.$executeRawUnsafe(`UPDATE "User" SET "username" = 'usuario_' || SUBSTR("id", 1, 8) WHERE "username" IS NULL OR "username" = ''`)
+    } catch (err) {
+      console.error('[db] Error populating username:', (err as Error).message)
+    }
+    // Drop old email+householdId unique index if exists
+    await dropIndexIfExists(prisma, 'User_email_householdId_key')
+
+    // Account: add type column if missing
+    await addColumnIfMissing(prisma, 'Account', 'type', "TEXT NOT NULL DEFAULT 'bank'")
+
+    // Category: add description column if missing
+    await addColumnIfMissing(prisma, 'Category', 'description', 'TEXT')
+
+    // Subcategory: add description column if missing
+    await addColumnIfMissing(prisma, 'Subcategory', 'description', 'TEXT')
+
+    // Transaction: add new columns if missing
+    await addColumnIfMissing(prisma, 'Transaction', 'toAccountId', 'TEXT')
+    await addColumnIfMissing(prisma, 'Transaction', 'memberId', 'TEXT')
+    await addColumnIfMissing(prisma, 'Transaction', 'petId', 'TEXT')
+    await addColumnIfMissing(prisma, 'Transaction', 'userId', 'TEXT')
+
+    // Create index for toAccountId
+    try {
+      await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Transaction_toAccountId_idx" ON "Transaction" ("toAccountId")`)
+    } catch {
+      // ignore
+    }
+
+    console.log('[db] Schema verified — all tables and columns ensured.')
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.error('[db] Failed to ensure schema:', err)
-    // Do not mark as initialized so a future call could retry.
     throw err
   }
 }
 
-function createPrismaClient(): PrismaClient {
+function createPrismaClient() {
   const client = new PrismaClient({
     log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
   })
 
-  // Kick off schema creation immediately. Any errors will surface on the
-  // first query (Prisma queues operations until connected).
-  ensureSchema(client).catch((err) => {
-    // Swallow here — the error has already been logged.
-    void err
-  })
+  // Run schema migration and store the promise so callers can await it
+  const ready = ensureSchema(client)
+  if (!globalForPrisma.__prismaReady) {
+    globalForPrisma.__prismaReady = ready
+  }
 
   return client
 }
@@ -210,3 +247,6 @@ function createPrismaClient(): PrismaClient {
 export const db = globalForPrisma.prisma ?? createPrismaClient()
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = db
+
+// Export a promise that resolves when schema is ready
+export const dbReady = globalForPrisma.__prismaReady ?? ensureSchema(db)

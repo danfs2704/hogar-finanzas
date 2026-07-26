@@ -50,6 +50,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path ".next/standalone/node_modules/.prisma" | Out-Null
           Copy-Item -Recurse -Force node_modules/.prisma .next/standalone/node_modules/.prisma/
           Copy-Item -Recurse -Force node_modules/@prisma .next/standalone/node_modules/@prisma/
+          Copy-Item -Recurse -Force node_modules/bcryptjs .next/standalone/node_modules/bcryptjs/
 
       - name: Prepare Tauri server bundle
         shell: pwsh
