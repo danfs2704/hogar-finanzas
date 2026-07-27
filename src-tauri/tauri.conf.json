@@ -39,7 +39,7 @@
       "nsis": {
         "installMode": "currentUser",
         "languages": ["Spanish", "English"],
-        "installerHooks": "../../scripts/nsis-hooks.nsi"
+        "installerHooks": "../nsis/nsis-hooks.nsi"
       }
     }
   }
