@@ -166,7 +166,7 @@ fn main() {
                             let _ = child.wait();
                             write_log("Node.js process killed successfully");
                         }
-                    }
+                    };
                 }
             }
         })
