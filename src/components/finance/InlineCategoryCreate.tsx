@@ -10,11 +10,12 @@ interface InlineCategoryCreateProps {
   mode: 'category' | 'subcategory';
   type?: 'expense' | 'income';
   parentId?: string; // categoryId for subcategory
+  householdId: string;
   onCreated: (item: { id: string; name: string; icon: string; color: string; description: string }) => void;
   onCancel: () => void;
 }
 
-export default function InlineCategoryCreate({ mode, type = 'expense', parentId, onCreated, onCancel }: InlineCategoryCreateProps) {
+export default function InlineCategoryCreate({ mode, type = 'expense', parentId, householdId, onCreated, onCancel }: InlineCategoryCreateProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [color, setColor] = useState('#6366f1');
@@ -33,7 +34,7 @@ export default function InlineCategoryCreate({ mode, type = 'expense', parentId,
     try {
       const url = mode === 'category' ? '/api/categories' : '/api/subcategories';
       const body = mode === 'category'
-        ? { name: name.trim(), type, icon, color, description: description.trim() || null }
+        ? { name: name.trim(), type, icon, color, description: description.trim() || null, householdId }
         : { name: name.trim(), icon, color, categoryId: parentId, description: description.trim() || null };
 
       const res = await fetch(url, {

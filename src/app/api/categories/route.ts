@@ -25,10 +25,10 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, type, icon, color, householdId } = body;
+    const { name, type, icon, color, description, householdId } = body;
     if (!householdId) return NextResponse.json({ error: 'householdId requerido' }, { status: 400 });
     const category = await db.category.create({
-      data: { name, type: type || 'expense', icon: icon || 'Tag', color: color || '#6366f1', householdId },
+      data: { name, type: type || 'expense', icon: icon || 'Tag', color: color || '#6366f1', description: description || null, householdId },
     });
     return NextResponse.json(category, { status: 201 });
   } catch (error) {

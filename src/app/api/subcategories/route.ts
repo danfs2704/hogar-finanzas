@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { db, dbReady } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
   try {
+    await dbReady;
     const body = await request.json();
-    const { name, icon, color, categoryId } = body;
+    const { name, icon, color, description, categoryId } = body;
     const subcategory = await db.subcategory.create({
-      data: { name, icon: icon || 'CircleDot', color: color || '#6366f1', categoryId },
+      data: { name, icon: icon || 'CircleDot', color: color || '#6366f1', description: description || null, categoryId },
     });
     return NextResponse.json(subcategory, { status: 201 });
   } catch (error) {

@@ -94,9 +94,22 @@ export default function CalculatorPopup({ value, onChange, onClose }: Calculator
     setDisplay(prev => prev.startsWith('-') ? prev.slice(1) : `-${prev}`);
   };
 
+  const resolvePending = () => {
+    if (prevValue === null || !pendingOp) return display;
+    const current = parseFloat(display);
+    let result = prevValue;
+    if (pendingOp === '+') result = prevValue + current;
+    else if (pendingOp === '-') result = prevValue - current;
+    else if (pendingOp === '*') result = prevValue * current;
+    else if (pendingOp === '/') result = current !== 0 ? prevValue / current : 0;
+    return result.toString();
+  };
+
   const handleApply = () => {
-    const num = parseFloat(display);
-    if (!isNaN(num)) {
+    // Resolve any pending operation first, then apply the result
+    const finalDisplay = resolvePending();
+    const num = parseFloat(finalDisplay);
+    if (!isNaN(num) && num > 0) {
       onChange(formatLatam(num));
     }
     onClose();

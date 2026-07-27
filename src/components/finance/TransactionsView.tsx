@@ -329,6 +329,7 @@ export default function TransactionsView() {
                       <InlineCategoryCreate
                         mode="category"
                         type={form.type as 'expense' | 'income'}
+                        householdId={hid!}
                         onCreated={handleCategoryCreated}
                         onCancel={() => setShowNewCat(false)}
                       />
@@ -358,6 +359,7 @@ export default function TransactionsView() {
                       <InlineCategoryCreate
                         mode="subcategory"
                         parentId={form.categoryId}
+                        householdId={hid!}
                         onCreated={handleSubcategoryCreated}
                         onCancel={() => setShowNewSub(false)}
                       />
