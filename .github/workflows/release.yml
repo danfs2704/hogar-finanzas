@@ -1,18 +1,3 @@
-# ============================================================
-# GitHub Actions: Build Windows installer for Hogar Finanzas
-# ============================================================
-# This workflow runs automatically when you push a tag like "v0.1.0"
-# It also has a manual trigger (workflow_dispatch) so you can run it
-# from the GitHub Actions tab anytime.
-#
-# The workflow:
-# 1. Sets up Node.js and Rust on a Windows machine
-# 2. Builds the Next.js app
-# 3. Downloads a portable Node.js to bundle with the app
-# 4. Builds the Tauri Windows installer (.msi and .exe)
-# 5. Uploads the installer to GitHub Releases
-# ============================================================
-
 name: Build Windows Installer
 
 on:
@@ -20,59 +5,63 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version number (e.g. 0.3.0)'
-        required: false
-        default: '0.3.0'
 
 jobs:
   build-windows:
     runs-on: windows-latest
 
     steps:
-      # --- Step 1: Get the code ---
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # --- Step 2: Install Node.js ---
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: 'npm'
 
-      # --- Step 3: Install Rust and Tauri CLI ---
       - name: Install Rust stable
-        uses: dtolnay/rust-action/setup@v1
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Install Tauri CLI
         run: cargo install tauri-cli --version "^2"
 
-      # --- Step 4: Install Node.js dependencies ---
       - name: Install npm dependencies
         run: npm install
 
-      # --- Step 5: Generate Prisma client ---
       - name: Generate Prisma client
         run: npx prisma generate
 
-      # --- Step 6: Build Next.js standalone ---
       - name: Build Next.js
         run: npx next build
         env:
           DATABASE_URL: "file:./dev.db"
           NODE_ENV: production
 
-      # --- Step 7: Copy static files into standalone build ---
       - name: Copy static assets
+        shell: pwsh
         run: |
           Copy-Item -Recurse -Force .next/static .next/standalone/.next/
           Copy-Item -Recurse -Force public .next/standalone/
-          Copy-Item scripts/server-entry.js .next/standalone/server.js
 
-      # --- Step 8: Download portable Node.js for Windows ---
-      - name: Download Node.js runtime for bundling
+      - name: Copy Prisma engine files
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path ".next/standalone/node_modules/.prisma" | Out-Null
+          Copy-Item -Recurse -Force node_modules/.prisma .next/standalone/node_modules/.prisma/
+          Copy-Item -Recurse -Force node_modules/@prisma .next/standalone/node_modules/@prisma/
+          Copy-Item -Recurse -Force node_modules/bcryptjs .next/standalone/node_modules/bcryptjs/
+
+      - name: Prepare Tauri server bundle
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path src-tauri/server
+          Copy-Item -Recurse -Force .next/standalone/* src-tauri/server/
+          Rename-Item -Path "src-tauri/server/server.js" -NewName "server-original.js" -ErrorAction SilentlyContinue
+          Copy-Item scripts/server-wrapper.js src-tauri/server/server.js
+
+      - name: Download Node.js runtime
+        shell: pwsh
         run: |
           Invoke-WebRequest -Uri "https://nodejs.org/dist/v22.16.0/node-v22.16.0-win-x64.zip" -OutFile "node-runtime.zip"
           Expand-Archive -Path "node-runtime.zip" -DestinationPath "src-tauri/node-runtime-temp"
@@ -80,56 +69,16 @@ jobs:
           Remove-Item -Recurse -Force "src-tauri/node-runtime-temp"
           Remove-Item "node-runtime.zip"
 
-      # --- Step 9: Copy server files to Tauri resources ---
-      - name: Prepare Tauri server bundle
-        run: |
-          New-Item -ItemType Directory -Force -Path "src-tauri/server"
-          Copy-Item -Recurse -Force .next/standalone/* src-tauri/server/
-
-      # --- Step 10: Build Tauri (creates .msi and .exe installer) ---
       - name: Build Tauri app
         run: cargo tauri build
         env:
           DATABASE_URL: "file:./data.db"
           NODE_ENV: production
 
-      # --- Step 11: Get version for the release ---
-      - name: Get version
-        id: version
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-          else
-            echo "VERSION=${{ inputs.version }}" >> $GITHUB_OUTPUT
-          fi
-
-      # --- Step 12: Upload installers to GitHub Releases ---
-      - name: Upload release assets
-        uses: softprops/action-gh-release@v2
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: v${{ steps.version.outputs.VERSION }}
-          name: Hogar Finanzas v${{ steps.version.outputs.VERSION }}
-          body: |
-            ## Hogar Finanzas v${{ steps.version.outputs.VERSION }}
-
-            ### Instaladores Windows:
-            - **NSIS (.exe)**: Recomendado para la mayoría de los usuarios
-            - **MSI (.msi)**: Alternativa si el .exe no funciona
-
-            ### Instrucciones:
-            1. Descargá el archivo `.exe` o `.msi`
-            2. Ejecutalo y seguí las instrucciones del instalador
-            3. La app se abrirá automáticamente
-
-            ### Base de datos:
-            La base de datos se crea automáticamente en:
-            `C:\Usuarios\<TuUsuario>\AppData\Roaming\HogarFinanzas\data.db`
-
-            ### Backup:
-            Para hacer un backup, simplemente copiá el archivo `data.db` a un lugar seguro.
-          files: |
+          name: windows-installer
+          path: |
             src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/release/bundle/msi/*.msi
-          draft: false
-          prerelease: false

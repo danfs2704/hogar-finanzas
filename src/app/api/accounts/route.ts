@@ -1,17 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { db, dbReady } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
+    await dbReady;
     const { searchParams } = new URL(request.url);
     const householdId = searchParams.get('householdId');
     if (!householdId) return NextResponse.json({ error: 'householdId requerido' }, { status: 400 });
     const accounts = await db.account.findMany({
       where: { householdId },
       orderBy: { createdAt: 'desc' },
-      include: { _count: { select: { transactions: true } } },
+      include: { _count: { select: { transactionsFrom: true } } },
     });
-    return NextResponse.json(accounts);
+    // Map transactionsFrom count to transactions for backward compat
+    return NextResponse.json(accounts.map(a => ({
+      ...a,
+      _count: { transactions: a._count.transactionsFrom },
+    })));
   } catch (error) {
     console.error('Accounts GET error:', error);
     return NextResponse.json({ error: 'Error del servidor' }, { status: 500 });
@@ -21,10 +26,10 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, currency, balance, color, icon, householdId } = body;
+    const { name, type, currency, balance, color, icon, householdId } = body;
     if (!householdId) return NextResponse.json({ error: 'householdId requerido' }, { status: 400 });
     const account = await db.account.create({
-      data: { name, currency: currency || 'ARS', balance: balance || 0, color: color || '#6366f1', icon: icon || 'Wallet', householdId },
+      data: { name, type: type || 'bank', currency: currency || 'ARS', balance: balance || 0, color: color || '#6366f1', icon: icon || 'Wallet', householdId },
     });
     return NextResponse.json(account, { status: 201 });
   } catch (error) {
@@ -36,9 +41,10 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const { id, name, currency, color, icon, isActive } = body;
+    const { id, name, type, currency, color, icon, isActive } = body;
     const data: Record<string, unknown> = {};
     if (name !== undefined) data.name = name;
+    if (type !== undefined) data.type = type;
     if (currency !== undefined) data.currency = currency;
     if (color !== undefined) data.color = color;
     if (icon !== undefined) data.icon = icon;

@@ -5,16 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { DynamicIcon } from '@/lib/icons';
 import { useAppStore } from '@/store/useAppStore';
 
-interface HouseholdData {
-  id: string;
-  name: string;
-  description: string | null;
+interface StatsData {
   _count: { users: number; accounts: number; transactions: number };
 }
 
@@ -22,9 +18,7 @@ export default function SettingsView() {
   const { user, triggerRefresh, refreshKey } = useAppStore();
   const householdId = user?.householdId;
 
-  const [household, setHousehold] = useState<HouseholdData | null>(null);
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ name: '', description: '' });
+  const [stats, setStats] = useState<StatsData | null>(null);
   const [saving, setSaving] = useState(false);
 
   // Password change state
@@ -34,37 +28,25 @@ export default function SettingsView() {
   const [pwLoading, setPwLoading] = useState(false);
   const [pwMsg, setPwMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
+  // DB location state
+  const [dbPath, setDbPath] = useState('Cargando...');
+  const [dbChanging, setDbChanging] = useState(false);
+  const [dbMsg, setDbMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+
   useEffect(() => {
     if (!householdId) return;
     fetch(`/api/household?id=${householdId}`)
       .then(r => r.ok ? r.json() : null)
-      .then((data: HouseholdData | null) => {
-        if (data) {
-          setHousehold(data);
-          setForm({ name: data.name, description: data.description || '' });
-        }
+      .then((data: StatsData | null) => {
+        if (data) setStats(data);
+      });
+    // Load DB path
+    fetch('/api/settings/db-path')
+      .then(r => r.ok ? r.json() : null)
+      .then((data: { path: string } | null) => {
+        if (data) setDbPath(data.path);
       });
   }, [householdId, refreshKey]);
-
-  const handleSave = () => {
-    if (!form.name || !householdId) return;
-    setSaving(true);
-    fetch('/api/household', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: householdId, name: form.name, description: form.description || null }),
-    }).then(() => {
-      setEditing(false);
-      triggerRefresh();
-    }).finally(() => setSaving(false));
-  };
-
-  const cancelEdit = () => {
-    setEditing(false);
-    if (household) {
-      setForm({ name: household.name, description: household.description || '' });
-    }
-  };
 
   const handleChangePassword = () => {
     if (!user?.id) return;
@@ -79,26 +61,57 @@ export default function SettingsView() {
     }).then(r => r.json()).then(data => {
       if (data.success) {
         setPwMsg({ type: 'ok', text: 'Contraseña actualizada correctamente' });
-        setNewPassword('');
-        setConfirmPassword('');
-        setShowPwForm(false);
+        setNewPassword(''); setConfirmPassword(''); setShowPwForm(false);
       } else {
         setPwMsg({ type: 'err', text: data.error || 'Error al cambiar la contraseña' });
       }
     }).catch(() => setPwMsg({ type: 'err', text: 'Error de conexión' })).finally(() => setPwLoading(false));
   };
 
+  const handleChangeDbLocation = async () => {
+    try {
+      // Dynamically import Tauri dialog plugin (only available in desktop app)
+      const { open } = await import('@tauri-apps/plugin-dialog');
+      const folder = await open({
+        directory: true,
+        title: 'Elegir ubicación para la base de datos',
+      });
+      if (!folder) return;
+
+      setDbChanging(true);
+      setDbMsg(null);
+      const res = await fetch('/api/settings/db-path', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: folder }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setDbPath(data.path);
+        setDbMsg({ type: 'ok', text: 'Ubicación cambiada. La base de datos fue copiada. Reiniciá la aplicación para usar la nueva ubicación.' });
+      } else {
+        setDbMsg({ type: 'err', text: data.error || 'Error al cambiar la ubicación' });
+      }
+    } catch {
+      setDbMsg({ type: 'err', text: 'No se pudo abrir el selector de carpetas. Verificá que estés usando la aplicación de escritorio.' });
+    } finally {
+      setDbChanging(false);
+    }
+  };
+
   const STATS = [
-    { label: 'Usuarios', value: household?._count.users ?? 0, icon: 'Users', color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { label: 'Cuentas', value: household?._count.accounts ?? 0, icon: 'Wallet', color: 'text-blue-600', bg: 'bg-blue-50' },
-    { label: 'Transacciones', value: household?._count.transactions ?? 0, icon: 'Receipt', color: 'text-violet-600', bg: 'bg-violet-50' },
+    { label: 'Usuarios', value: stats?._count.users ?? 0, icon: 'Users', color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    { label: 'Cuentas', value: stats?._count.accounts ?? 0, icon: 'Wallet', color: 'text-blue-600', bg: 'bg-blue-50' },
+    { label: 'Transacciones', value: stats?._count.transactions ?? 0, icon: 'Receipt', color: 'text-violet-600', bg: 'bg-violet-50' },
   ];
+
+  const isTauri = typeof window !== 'undefined' && !!(window as any).__TAURI__;
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold text-slate-800">Configuración</h2>
-        <p className="text-slate-500 text-sm">Administre la configuración del hogar</p>
+        <p className="text-slate-500 text-sm">Administrar cuenta y preferencias</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -119,75 +132,7 @@ export default function SettingsView() {
         ))}
       </div>
 
-      <Card className="border-0 shadow-sm">
-        <CardHeader className="pb-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center">
-                <DynamicIcon name="Home" className="w-5 h-5 text-emerald-600" />
-              </div>
-              <CardTitle className="text-lg text-slate-800">Datos del Hogar</CardTitle>
-            </div>
-            {!editing && (
-              <Button variant="outline" size="sm" className="gap-2" onClick={() => setEditing(true)}>
-                <DynamicIcon name="Edit" className="w-3.5 h-3.5" />Editar
-              </Button>
-            )}
-          </div>
-          {/* Household join code */}
-          <div className="mt-3 p-3 rounded-lg bg-amber-50 border border-amber-200">
-            <div className="flex items-center gap-2 mb-1">
-              <DynamicIcon name="Link" className="w-3.5 h-3.5 text-amber-600" />
-              <p className="text-xs font-medium text-amber-700">Código para unirse al hogar</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 text-sm font-mono bg-white px-3 py-1.5 rounded border border-amber-200 text-amber-900 select-all">{householdId}</code>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 text-xs"
-                onClick={() => { navigator.clipboard.writeText(householdId || ''); }}
-              >
-                <DynamicIcon name="Copy" className="w-3 h-3 mr-1" />Copiar
-              </Button>
-            </div>
-            <p className="text-[11px] text-amber-600 mt-1">Compartí este código con los miembros que quieras invitar.</p>
-          </div>
-        </CardHeader>
-        <Separator />
-        <CardContent className="pt-5">
-          {editing ? (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Nombre del Hogar</Label>
-                <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Nombre del hogar" />
-              </div>
-              <div className="space-y-2">
-                <Label>Descripción</Label>
-                <Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Descripción opcional del hogar" rows={3} />
-              </div>
-              <div className="flex gap-2">
-                <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleSave} disabled={saving || !form.name}>
-                  {saving ? 'Guardando...' : 'Guardar Cambios'}
-                </Button>
-                <Button variant="outline" onClick={cancelEdit}>Cancelar</Button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div>
-                <p className="text-xs text-slate-400 mb-1">Nombre</p>
-                <p className="font-semibold text-slate-800">{household?.name || '—'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-400 mb-1">Descripción</p>
-                <p className="text-slate-600 text-sm">{household?.description || 'Sin descripción'}</p>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
+      {/* Mi Cuenta */}
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-4">
           <div className="flex items-center gap-3">
@@ -196,7 +141,7 @@ export default function SettingsView() {
             </div>
             <div>
               <CardTitle className="text-lg text-slate-800">Mi Cuenta</CardTitle>
-              <p className="text-xs text-slate-400">Información de su usuario</p>
+              <p className="text-xs text-slate-400">Información de usuario</p>
             </div>
           </div>
         </CardHeader>
@@ -213,8 +158,7 @@ export default function SettingsView() {
                   {user?.role === 'admin' ? 'Admin' : 'Miembro'}
                 </Badge>
               </div>
-              <p className="text-slate-500 text-sm">{user?.email}</p>
-              <p className="text-slate-400 text-xs mt-1">Hogar: {user?.householdName || household?.name || '—'}</p>
+              <p className="text-slate-500 text-sm">@{user?.username}{user?.email ? ` · ${user.email}` : ''}</p>
             </div>
           </div>
 
@@ -247,6 +191,45 @@ export default function SettingsView() {
                 </div>
               </div>
             )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Ubicación de Base de Datos */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
+              <DynamicIcon name="Database" className="w-5 h-5 text-amber-600" />
+            </div>
+            <div>
+              <CardTitle className="text-lg text-slate-800">Base de Datos</CardTitle>
+              <p className="text-xs text-slate-400">Ubicación del archivo de datos</p>
+            </div>
+          </div>
+        </CardHeader>
+        <Separator />
+        <CardContent className="pt-5">
+          <div className="space-y-3">
+            <div>
+              <p className="text-xs text-slate-400 mb-1">Ubicación actual</p>
+              <code className="block text-sm font-mono bg-slate-50 px-3 py-2 rounded border border-slate-200 text-slate-700 break-all">{dbPath}</code>
+            </div>
+            {dbMsg && (
+              <div className={`p-3 rounded-lg text-sm ${dbMsg.type === 'ok' ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
+                {dbMsg.text}
+              </div>
+            )}
+            {isTauri && (
+              <Button variant="outline" className="gap-2" onClick={handleChangeDbLocation} disabled={dbChanging}>
+                <DynamicIcon name={dbChanging ? 'Loader2' : 'FolderOpen'} className={`w-4 h-4 ${dbChanging ? 'animate-spin' : ''}`} />
+                {dbChanging ? 'Copiando...' : 'Cambiar Ubicación'}
+              </Button>
+            )}
+            <p className="text-xs text-slate-400">
+              Podés elegir dónde guardar la base de datos (por ejemplo, en un pendrive o carpeta de respaldo).
+              Al cambiar la ubicación, el archivo actual se copia a la nueva carpeta.
+            </p>
           </div>
         </CardContent>
       </Card>

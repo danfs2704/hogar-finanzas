@@ -158,7 +158,6 @@ fn main() {
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { .. } = event {
                 write_log("Window close requested — killing Node.js");
-                // Use inner block so MutexGuard drops before State reference
                 {
                     let state = window.state::<ServerHandle>();
                     if let Ok(mut guard) = state.0.lock() {

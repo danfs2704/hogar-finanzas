@@ -1,15 +1,19 @@
 export interface User {
   id: string;
-  email: string;
+  email: string | null;
+  username: string;
   name: string;
   role: 'admin' | 'member';
   householdId: string;
   householdName?: string;
 }
 
+export type AccountType = 'bank' | 'cash' | 'virtual_wallet';
+
 export interface Account {
   id: string;
   name: string;
+  type: AccountType;
   currency: 'ARS' | 'USD';
   balance: number;
   color: string;
@@ -43,6 +47,7 @@ export interface Category {
   type: 'expense' | 'income';
   icon: string;
   color: string;
+  description: string | null;
   isDefault: boolean;
   subcategories?: Subcategory[];
   _count?: { subcategories: number; transactions: number };
@@ -53,29 +58,34 @@ export interface Subcategory {
   name: string;
   icon: string;
   color: string;
+  description: string | null;
   categoryId: string;
   isDefault: boolean;
   _count?: { transactions: number };
 }
 
+export type TransactionType = 'expense' | 'income' | 'transfer';
+
 export interface Transaction {
   id: string;
-  type: 'expense' | 'income';
+  type: TransactionType;
   amount: number;
   description: string;
   date: string;
   notes: string | null;
   accountId: string;
-  categoryId: string;
+  toAccountId: string | null;
+  categoryId: string | null;
   subcategoryId: string | null;
   memberId: string | null;
   petId: string | null;
   userId: string | null;
   account?: Account;
-  category?: Category;
-  subcategory?: Subcategory;
-  member?: HouseholdMember;
-  pet?: Pet;
+  toAccount?: Account;
+  category?: Category | null;
+  subcategory?: Subcategory | null;
+  member?: HouseholdMember | null;
+  pet?: Pet | null;
   user?: { id: string; name: string } | null;
 }
 
