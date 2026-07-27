@@ -11,7 +11,7 @@ const NAV_ITEMS: { id: ViewMode; label: string; icon: string; adminOnly?: boolea
   { id: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard' },
   { id: 'transactions', label: 'Transacciones', icon: 'ArrowLeftRight' },
   { id: 'accounts', label: 'Cuentas', icon: 'Wallet' },
-  { id: 'members', label: 'Hogar', icon: 'Users' },
+  { id: 'members', label: 'Personas', icon: 'Users' },
   { id: 'categories', label: 'Categorías', icon: 'Tags' },
   { id: 'analytics', label: 'Análisis', icon: 'BarChart3' },
   { id: 'users', label: 'Usuarios', icon: 'UserCog', adminOnly: true },
@@ -33,7 +33,7 @@ export default function Sidebar() {
         </div>
         <div className="min-w-0">
           <h1 className="font-bold text-sm truncate">Finanzas Hogar</h1>
-          <p className="text-xs text-slate-400 truncate">{user?.householdName || user?.name}</p>
+          <p className="text-xs text-slate-400 truncate">{user?.name}</p>
         </div>
       </div>
       <Separator className="bg-slate-700" />

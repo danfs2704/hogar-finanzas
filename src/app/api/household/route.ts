@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { db, dbReady } from '@/lib/db';
 
 // GET — household info + seed default categories if needed
 export async function GET(request: NextRequest) {
   try {
+    await dbReady;
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     if (!id) return NextResponse.json({ error: 'ID requerido' }, { status: 400 });
@@ -19,6 +20,7 @@ export async function GET(request: NextRequest) {
 // PUT — update household name/description
 export async function PUT(request: NextRequest) {
   try {
+    await dbReady;
     const { id, name, description } = await request.json();
     if (!id) return NextResponse.json({ error: 'ID requerido' }, { status: 400 });
     const data: Record<string, unknown> = {};
