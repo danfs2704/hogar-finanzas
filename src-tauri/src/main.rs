@@ -4,127 +4,172 @@ use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use std::net::TcpStream;
 use std::time::Duration;
+use std::fs::OpenOptions;
+use std::io::Write;
+use std::path::PathBuf;
+use tauri::Manager;
 
-/// Holds the Node.js server child process so we can kill it on exit
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 struct ServerHandle(Mutex<Option<Child>>);
 
 impl Drop for ServerHandle {
     fn drop(&mut self) {
         if let Ok(mut guard) = self.0.lock() {
             if let Some(ref mut child) = *guard {
-                eprintln!("[Hogar] Stopping Node.js server...");
                 let _ = child.kill();
                 let _ = child.wait();
-                eprintln!("[Hogar] Server stopped.");
             }
         }
     }
 }
 
-/// Wait until the TCP port is accepting connections (server is ready)
+fn app_data_dir() -> PathBuf {
+    dirs::data_dir().unwrap_or_default().join("HogarFinanzas")
+}
+
+fn log_file() -> PathBuf {
+    let dir = app_data_dir();
+    let _ = std::fs::create_dir_all(&dir);
+    dir.join("server.log")
+}
+
+fn write_log(msg: &str) {
+    if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(log_file()) {
+        let _ = writeln!(f, "[{}] {}", chrono::Local::now().format("%H:%M:%S"), msg);
+    }
+}
+
 fn wait_for_server(port: u16, max_seconds: u64) -> bool {
     for i in 0..max_seconds {
         if TcpStream::connect(format!("127.0.0.1:{}", port)).is_ok() {
-            // Give it one more second for Next.js to be fully ready
-            std::thread::sleep(Duration::from_secs(1));
+            std::thread::sleep(Duration::from_secs(2));
             return true;
         }
-        if i % 5 == 0 {
-            eprintln!("[Hogar] Waiting for server on port {}... ({}s)", port, i);
+        if i % 3 == 0 {
+            write_log(&format!("Waiting for server on port {}... ({}s)", port, i));
         }
         std::thread::sleep(Duration::from_secs(1));
     }
     false
 }
 
-/// Get the database path. Default: app data dir. Can be overridden via DB_PATH env var.
-fn get_db_path() -> String {
-    // If DB_PATH is set (e.g., from a previous user choice), use it
-    if let Ok(p) = std::env::var("DB_PATH") {
-        return format!("file:{}", p);
+fn get_db_url() -> String {
+    let app_dir = app_data_dir();
+    let _ = std::fs::create_dir_all(&app_dir);
+
+    // Check config.json for custom DB path
+    let config_path = app_dir.join("config.json");
+    if let Ok(content) = std::fs::read_to_string(&config_path) {
+        if let Ok(config) = serde_json::from_str::<serde_json::Value>(&content) {
+            if let Some(db_path) = config.get("dbPath").and_then(|v| v.as_str()) {
+                let custom_dir = PathBuf::from(db_path);
+                let _ = std::fs::create_dir_all(&custom_dir);
+                return format!("file:{}", custom_dir.join("data.db").display());
+            }
+        }
     }
 
-    // Default: use the app's data directory
-    // On Windows this is typically: C:\Users\<User>\AppData\Roaming\com.hogarfinanzas.app
-    // On Linux this is typically: ~/.config/com.hogarfinanzas.app
-    if let Some(data_dir) = dirs::data_dir() {
-        let app_dir = data_dir.join("HogarFinanzas");
-        let _ = std::fs::create_dir_all(&app_dir);
-        let db_file = app_dir.join("data.db");
-        return format!("file:{}", db_file.display());
-    }
+    // Default: AppData/HogarFinanzas/data.db
+    format!("file:{}", app_dir.join("data.db").display())
+}
 
-    // Fallback: current directory
-    "file:./data.db".to_string()
+fn get_node_log_path() -> String {
+    let dir = app_data_dir();
+    let _ = std::fs::create_dir_all(&dir);
+    dir.join("node.log").to_string_lossy().to_string()
 }
 
 fn main() {
     let port: u16 = 3456;
     let server_handle = ServerHandle(Mutex::new(None));
 
+    let db_url = get_db_url();
+    let node_log = get_node_log_path();
+    let app_data = app_data_dir();
+    let _ = std::fs::create_dir_all(&app_data);
+    let app_data_str = app_data.to_string_lossy().to_string();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(server_handle)
         .setup(move |app| {
-            eprintln!("[Hogar] Starting Hogar Finanzas...");
+            write_log("=== Hogar Finanzas starting ===");
 
-            // Determine paths based on dev vs production
             let (node_exe, server_dir) = if cfg!(debug_assertions) {
-                // DEV mode: use system node, current directory
                 ("node".to_string(), std::env::current_dir().unwrap_or_default())
             } else {
-                // PRODUCTION mode: use bundled node and server
-                let resource_dir = app.path().resource_dir()
-                    .expect("failed to resolve resource dir");
-
-                let node_path = resource_dir.join("node-runtime").join("node.exe");
-                let srv_dir = resource_dir.join("server");
-
-                (node_path.to_string_lossy().to_string(), srv_dir)
+                let res = app.path().resource_dir().expect("resource dir");
+                let node = res.join("node-runtime").join("node.exe");
+                let srv = res.join("server");
+                (node.to_string_lossy().to_string(), srv)
             };
 
-            let db_url = get_db_path();
-            eprintln!("[Hogar] Database: {}", db_url);
-            eprintln!("[Hogar] Node: {}", node_exe);
-            eprintln!("[Hogar] Server dir: {}", server_dir.display());
+            write_log(&format!("Node: {}", node_exe));
+            write_log(&format!("Server dir: {}", server_dir.display()));
+            write_log(&format!("DB: {}", db_url));
+            write_log(&format!("Node log: {}", node_log));
+            write_log(&format!("App data: {}", app_data_str));
 
-            // Start the Node.js server
-            let child = Command::new(&node_exe)
-                .arg("server.js")
+            let mut cmd = Command::new(&node_exe);
+            cmd.arg("server.js")
                 .env("PORT", port.to_string())
                 .env("HOSTNAME", "127.0.0.1")
                 .env("NODE_ENV", "production")
                 .env("DATABASE_URL", &db_url)
+                .env("NODE_LOG", &node_log)
+                .env("APP_DATA_DIR", &app_data_str)
                 .current_dir(&server_dir)
                 .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .spawn()
-                .expect(&format!("Failed to start Node.js server. Make sure '{}' exists.", node_exe));
+                .stderr(Stdio::piped());
 
-            // Store the process handle
+            #[cfg(target_os = "windows")]
             {
-                let handle = app.state::<ServerHandle>();
-                *handle.0.lock().unwrap() = Some(child);
+                cmd.creation_flags(CREATE_NO_WINDOW);
             }
 
-            // Wait for the server to be ready
-            eprintln!("[Hogar] Waiting for server to start...");
-            if !wait_for_server(port, 30) {
-                eprintln!("[Hogar] ERROR: Server did not start within 30 seconds.");
-                // Don't panic, the user will see the error in the console
-                return Ok(());
+            match cmd.spawn() {
+                Ok(child) => {
+                    *app.state::<ServerHandle>().0.lock().unwrap() = Some(child);
+                    write_log("Node.js server started (hidden window)");
+
+                    let window = app.get_webview_window("main").unwrap().clone();
+                    std::thread::spawn(move || {
+                        write_log("Waiting for server...");
+                        if wait_for_server(port, 30) {
+                            write_log("Server ready!");
+                            let url = format!("http://127.0.0.1:{}", port);
+                            let _ = window.navigate(tauri::Url::parse(&url).unwrap());
+                        } else {
+                            write_log("ERROR: Server did not start in 30s");
+                        }
+                    });
+                }
+                Err(e) => {
+                    write_log(&format!("FATAL: {}", e));
+                }
             }
-            eprintln!("[Hogar] Server is ready!");
-
-            // Navigate the main window to the server URL
-            let window = app.get_webview_window("main")
-                .expect("main window not found");
-
-            let url = format!("http://127.0.0.1:{}", port);
-            window.navigate(tauri::Url::parse(&url).unwrap())
-                .expect("failed to navigate");
-
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                write_log("Window close requested — killing Node.js");
+                // Use inner block so MutexGuard drops before State reference
+                {
+                    let state = window.state::<ServerHandle>();
+                    if let Ok(mut guard) = state.0.lock() {
+                        if let Some(ref mut child) = *guard {
+                            let _ = child.kill();
+                            let _ = child.wait();
+                            write_log("Node.js process killed successfully");
+                        }
+                    }
+                }
+            }
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
