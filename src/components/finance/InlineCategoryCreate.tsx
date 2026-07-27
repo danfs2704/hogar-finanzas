@@ -23,6 +23,7 @@ export default function InlineCategoryCreate({ mode, type = 'expense', parentId,
   const [iconSearch, setIconSearch] = useState('');
   const [showIcons, setShowIcons] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const filteredIcons = iconSearch
     ? AVAILABLE_ICONS.filter(i => i.toLowerCase().includes(iconSearch.toLowerCase()))
@@ -45,9 +46,13 @@ export default function InlineCategoryCreate({ mode, type = 'expense', parentId,
       if (res.ok) {
         const data = await res.json();
         onCreated({ id: data.id, name: data.name, icon: data.icon, color: data.color, description: data.description || '' });
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || `Error al crear ${mode === 'category' ? 'categoría' : 'subcategoría'}`);
       }
     } catch (err) {
       console.error('Error creating:', err);
+      setError('Error de conexión');
     }
     setLoading(false);
   };
@@ -120,6 +125,9 @@ export default function InlineCategoryCreate({ mode, type = 'expense', parentId,
         </div>
       )}
 
+      {error && (
+        <p className="text-xs text-rose-600">{error}</p>
+      )}
       <div className="flex gap-2">
         <Button size="sm" className="flex-1 h-8 bg-emerald-600 hover:bg-emerald-700 text-xs" onClick={handleSave} disabled={!name.trim() || loading}>
           {loading ? 'Creando...' : 'Crear'}

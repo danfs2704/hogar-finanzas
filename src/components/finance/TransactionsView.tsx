@@ -196,29 +196,32 @@ export default function TransactionsView() {
               {/* Amount with calculator */}
               <div className="space-y-2">
                 <Label>Monto *</Label>
-                <div className="relative" ref={calcRef}>
-                  <Input
-                    value={form.amount}
-                    onChange={e => handleAmountChange(e.target.value)}
-                    placeholder="0"
-                    className="pr-10 text-lg font-mono"
-                    onFocus={() => {}}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-slate-400 hover:text-emerald-600"
-                    onClick={() => setShowCalc(!showCalc)}
-                  >
-                    <DynamicIcon name="Calculator" className="w-4 h-4" />
-                  </Button>
-                  {showCalc && (
-                    <CalculatorPopup
+                <div ref={calcRef}>
+                  <div className="relative">
+                    <Input
                       value={form.amount}
-                      onChange={v => { setForm(prev => ({ ...prev, amount: v })); setShowCalc(false); }}
-                      onClose={() => setShowCalc(false)}
+                      onChange={e => handleAmountChange(e.target.value)}
+                      placeholder="0"
+                      className="pr-10 text-lg font-mono"
                     />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-slate-400 hover:text-emerald-600"
+                      onClick={() => setShowCalc(!showCalc)}
+                    >
+                      <DynamicIcon name="Calculator" className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  {showCalc && (
+                    <div className="mt-2">
+                      <CalculatorPopup
+                        value={form.amount}
+                        onChange={v => { setForm(prev => ({ ...prev, amount: v })); setShowCalc(false); }}
+                        onClose={() => setShowCalc(false)}
+                      />
+                    </div>
                   )}
                 </div>
               </div>
