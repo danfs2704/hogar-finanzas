@@ -13,6 +13,7 @@ const nextConfig: NextConfig = {
       "*": [
         "./node_modules/.prisma/**/*",
         "./node_modules/@prisma/client/**/*",
+        "./node_modules/@tauri-apps/**/*",
       ],
     },
     outputFileTracingRoot: ".",

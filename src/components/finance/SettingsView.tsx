@@ -113,11 +113,14 @@ export default function SettingsView() {
 
   const handleChangeDbLocation = async () => {
     try {
-      const { open } = await import('@tauri-apps/plugin-dialog');
-      const folder = await open({
-        directory: true,
-        title: 'Elegir ubicación para la base de datos',
-      });
+      let folder: string | null = null;
+      if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+        const { open } = await import('@tauri-apps/plugin-dialog');
+        folder = await open({
+          directory: true,
+          title: 'Elegir ubicación para la base de datos',
+        });
+      }
       if (!folder) return;
 
       setDbChanging(true);
@@ -134,8 +137,9 @@ export default function SettingsView() {
       } else {
         setDbMsg({ type: 'err', text: data.error || 'Error al cambiar la ubicación' });
       }
-    } catch {
-      setDbMsg({ type: 'err', text: 'No se pudo abrir el selector de carpetas.' });
+    } catch (err: any) {
+      console.error('DB location error:', err);
+      setDbMsg({ type: 'err', text: 'Error al abrir el selector de carpetas. Verificá que estés usando la aplicación de escritorio (no el navegador).' });
     } finally {
       setDbChanging(false);
     }

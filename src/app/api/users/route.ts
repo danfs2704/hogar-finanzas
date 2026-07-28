@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { db, dbReady } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 
 function generateUsername(name: string, householdId: string): string {
@@ -16,6 +16,7 @@ function generateUsername(name: string, householdId: string): string {
 // GET — list users (admin only, filtered by household)
 export async function GET(request: NextRequest) {
   try {
+    await dbReady;
     const { searchParams } = new URL(request.url);
     const householdId = searchParams.get('householdId');
     if (!householdId) return NextResponse.json({ error: 'householdId requerido' }, { status: 400 });
@@ -34,6 +35,7 @@ export async function GET(request: NextRequest) {
 // POST — admin creates user in household
 export async function POST(request: NextRequest) {
   try {
+    await dbReady;
     const { name, username: reqUsername, email, password, role, householdId } = await request.json();
     if (!name || !password || !householdId) return NextResponse.json({ error: 'Nombre, contraseña y hogar son requeridos' }, { status: 400 });
     if (password.length < 6) return NextResponse.json({ error: 'La contraseña debe tener al menos 6 caracteres' }, { status: 400 });
@@ -62,6 +64,7 @@ export async function POST(request: NextRequest) {
 // PUT — update user (role, active status)
 export async function PUT(request: NextRequest) {
   try {
+    await dbReady;
     const { id, name, role, isActive } = await request.json();
     if (!id) return NextResponse.json({ error: 'ID requerido' }, { status: 400 });
     const data: Record<string, unknown> = {};
@@ -79,6 +82,7 @@ export async function PUT(request: NextRequest) {
 // DELETE — remove user (admin only)
 export async function DELETE(request: NextRequest) {
   try {
+    await dbReady;
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     if (!id) return NextResponse.json({ error: 'ID requerido' }, { status: 400 });

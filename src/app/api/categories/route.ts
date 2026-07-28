@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    await dbReady;
     const body = await request.json();
     const { name, type, icon, color, description, householdId } = body;
     if (!householdId) return NextResponse.json({ error: 'householdId requerido' }, { status: 400 });

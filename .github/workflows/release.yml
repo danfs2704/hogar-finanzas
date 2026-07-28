@@ -44,13 +44,14 @@ jobs:
           Copy-Item -Recurse -Force .next/static .next/standalone/.next/
           Copy-Item -Recurse -Force public .next/standalone/
 
-      - name: Copy Prisma engine files
+      - name: Copy Prisma and Tauri client files
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path ".next/standalone/node_modules/.prisma" | Out-Null
           Copy-Item -Recurse -Force node_modules/.prisma .next/standalone/node_modules/.prisma/
           Copy-Item -Recurse -Force node_modules/@prisma .next/standalone/node_modules/@prisma/
           Copy-Item -Recurse -Force node_modules/bcryptjs .next/standalone/node_modules/bcryptjs/
+          Copy-Item -Recurse -Force node_modules/@tauri-apps .next/standalone/node_modules/@tauri-apps/
 
       - name: Prepare Tauri server bundle
         shell: pwsh

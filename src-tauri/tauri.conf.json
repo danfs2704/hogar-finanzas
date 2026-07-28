@@ -9,6 +9,7 @@
     "frontendDist": "spa"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "title": "Hogar Finanzas",
