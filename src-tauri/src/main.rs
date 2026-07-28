@@ -83,6 +83,28 @@ fn get_node_log_path() -> String {
     dir.join("node.log").to_string_lossy().to_string()
 }
 
+#[tauri::command]
+async fn pick_db_folder(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let (tx, rx) = std::sync::mpsc::channel();
+
+    app.dialog()
+        .file()
+        .set_title("Elegir ubicacion para la base de datos")
+        .pick_folder(move |path: Option<std::path::PathBuf>| {
+            let _ = tx.send(path.map(|p| p.to_string_lossy().to_string()));
+        });
+
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        rx.recv().map_err(|_| "Error en el dialogo".to_string())
+    })
+    .await
+    .map_err(|_| "Error de runtime".to_string())?;
+
+    result
+}
+
 fn main() {
     let port: u16 = 3456;
     let server_handle = ServerHandle(Mutex::new(None));
@@ -96,6 +118,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
+        .invoke_handler(tauri::generate_handler![pick_db_folder])
         .manage(server_handle)
         .setup(move |app| {
             write_log("=== Hogar Finanzas starting ===");

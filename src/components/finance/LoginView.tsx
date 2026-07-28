@@ -68,21 +68,11 @@ export default function LoginView() {
     setDbLoading(true);
     setDbMsg(null);
     try {
-      let folder: string | null = null;
       const tauriWin = window as any;
+      let folder: string | null = null;
 
-      // Method 1: global __TAURI__.dialog.open
-      if (tauriWin.__TAURI__?.dialog?.open) {
-        folder = await tauriWin.__TAURI__.dialog.open({
-          directory: true,
-          title: 'Elegir ubicacion para la base de datos',
-        });
-      }
-      // Method 2: __TAURI_INTERNALS__ invoke
-      else if (tauriWin.__TAURI_INTERNALS__) {
-        folder = await tauriWin.__TAURI_INTERNALS__.invoke('plugin:dialog|open', {
-          options: { directory: true, title: 'Elegir ubicacion para la base de datos' },
-        });
+      if (tauriWin.__TAURI_INTERNALS__) {
+        folder = await tauriWin.__TAURI_INTERNALS__.invoke('pick_db_folder');
       }
 
       if (!folder) { setDbLoading(false); return; }

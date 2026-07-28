@@ -113,29 +113,11 @@ export default function SettingsView() {
 
   const handleChangeDbLocation = async () => {
     try {
-      let folder: string | null = null;
       const tauriWin = window as any;
+      let folder: string | null = null;
 
-      // Method 1: Use global __TAURI__.dialog.open (injected by withGlobalTauri)
-      if (tauriWin.__TAURI__?.dialog?.open) {
-        folder = await tauriWin.__TAURI__.dialog.open({
-          directory: true,
-          title: 'Elegir ubicacion para la base de datos',
-        });
-      }
-      // Method 2: Use __TAURI_INTERNALS__ invoke directly
-      else if (tauriWin.__TAURI_INTERNALS__) {
-        folder = await tauriWin.__TAURI_INTERNALS__.invoke('plugin:dialog|open', {
-          options: { directory: true, title: 'Elegir ubicacion para la base de datos' },
-        });
-      }
-      // Method 3: Try dynamic import as last resort
-      else {
-        const { open } = await import('@tauri-apps/plugin-dialog');
-        folder = await open({
-          directory: true,
-          title: 'Elegir ubicacion para la base de datos',
-        });
+      if (tauriWin.__TAURI_INTERNALS__) {
+        folder = await tauriWin.__TAURI_INTERNALS__.invoke('pick_db_folder');
       }
 
       if (!folder) return;
