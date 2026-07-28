@@ -95,6 +95,7 @@ model Category {
   type        String        @default("expense")
   icon        String
   color       String        @default("#6366f1")
+  description String?
   isDefault   Boolean       @default(false)
   householdId String
   createdAt   DateTime      @default(now())
@@ -110,6 +111,7 @@ model Subcategory {
   name        String
   icon        String
   color       String   @default("#6366f1")
+  description String?
   categoryId  String
   isDefault   Boolean  @default(false)
   createdAt   DateTime @default(now())

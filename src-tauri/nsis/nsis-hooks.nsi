@@ -1,41 +1,37 @@
 ; NSIS installer hooks for Hogar Finanzas
 ; Tauri v2 supported macros: customHeader, preInstall, customInstall, customUnInstall
 
-Var DbCustomPath
-
 !macro customHeader
   !include "FileFunc.nsh"
 !macroend
 
-; Show DB location choice after files are installed
+; After files are installed, ask user for custom DB location
 !macro customInstall
-  ; Check if user already has a config (reinstall)
-  IfFileExists "$APPDATA\HogarFinanzas\config.json" db_skip_prompt
+  ; Skip if user already has a config (reinstall/upgrade)
+  IfFileExists "$APPDATA\HogarFinanzas\config.json" db_done
 
   MessageBox MB_YESNO|MB_ICONQUESTION \
-    "Desea elegir donde guardar la base de datos?$\n$\nSi elige NO, se usara la ubicacion predeterminada." \
-    /SD IDNO IDNO db_skip_prompt
+    "Desea elegir donde guardar la base de datos?$$\n$$\nSi elige NO, se usara la ubicacion predeterminada." \
+    /SD IDNO IDNO db_done
 
-  ; Ask for custom path using Windows API
-  ; BIF_RETURNONLYFSDIRS = 1, BIF_NEWDIALOGSTYLE = 0x40
-  System::Call '*(t "", t "Elegir ubicacion para la base de datos", i 0x41, i 0) p .r0'
-  System::Call 'shell32::SHBrowseForFolder(p r0) p .r1'
-  ${If} $1 != "0"
-    System::Call '*$1(t, t, p, p) i .r2'
-    ; Get path from PIDL
-    System::Call 'shlwapi::SHGetPathFromIDList(p r1, t .r3) i .r4'
-    ${If} $4 != "0"
-      StrCpy $DbCustomPath $3
-      CreateDirectory "$APPDATA\HogarFinanzas"
-      FileOpen $0 "$APPDATA\HogarFinanzas\config.json" w
-      FileWrite $0 '{"dbPath":"'$DbCustomPath'"}'
-      FileClose $0
-    ${EndIf}
-    System::Call 'ole32::CoTaskMemFree(p r1)'
-  ${EndIf}
-  System::Free $0
+  ; Write a PowerShell script to $PLUGINSDIR and execute it
+  InitPluginsDir
+  FileOpen $R0 "$PLUGINSDIR\pickfolder.ps1" w
+  FileWrite $R0 "Add-Type -AssemblyName System.Windows.Forms$$\r$$\n"
+  FileWrite $R0 "$$f = New-Object System.Windows.Forms.FolderBrowserDialog$$\r$$\n"
+  FileWrite $R0 "$$f.Description = 'Elegir ubicacion para la base de datos'$$\r$$\n"
+  FileWrite $R0 "if ($$f.ShowDialog() -eq 'OK') {$$\r$$\n"
+  FileWrite $R0 "  $$d = [Environment]::GetFolderPath('ApplicationData') + '\HogarFinanzas'$$\r$$\n"
+  FileWrite $R0 "  if (!(Test-Path $$d)) { New-Item -ItemType Directory -Path $$d | Out-Null }$$\r$$\n"
+  FileWrite $R0 "  @{'dbPath'=$$f.SelectedPath} | ConvertTo-Json -Compress | Set-Content ($$d + '\config.json')$$\r$$\n"
+  FileWrite $R0 "}$$\r$$\n"
+  FileClose $R0
 
-  db_skip_prompt:
+  nsExec::ExecToStack 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\pickfolder.ps1"'
+  Pop $R0
+  Pop $R1
+
+  db_done:
 !macroend
 
 !macro customUnInstall

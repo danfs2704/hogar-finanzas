@@ -114,13 +114,30 @@ export default function SettingsView() {
   const handleChangeDbLocation = async () => {
     try {
       let folder: string | null = null;
-      if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+      const tauriWin = window as any;
+
+      // Method 1: Use global __TAURI__.dialog.open (injected by withGlobalTauri)
+      if (tauriWin.__TAURI__?.dialog?.open) {
+        folder = await tauriWin.__TAURI__.dialog.open({
+          directory: true,
+          title: 'Elegir ubicacion para la base de datos',
+        });
+      }
+      // Method 2: Use __TAURI_INTERNALS__ invoke directly
+      else if (tauriWin.__TAURI_INTERNALS__) {
+        folder = await tauriWin.__TAURI_INTERNALS__.invoke('plugin:dialog|open', {
+          options: { directory: true, title: 'Elegir ubicacion para la base de datos' },
+        });
+      }
+      // Method 3: Try dynamic import as last resort
+      else {
         const { open } = await import('@tauri-apps/plugin-dialog');
         folder = await open({
           directory: true,
-          title: 'Elegir ubicación para la base de datos',
+          title: 'Elegir ubicacion para la base de datos',
         });
       }
+
       if (!folder) return;
 
       setDbChanging(true);
@@ -139,7 +156,8 @@ export default function SettingsView() {
       }
     } catch (err: any) {
       console.error('DB location error:', err);
-      setDbMsg({ type: 'err', text: 'Error al abrir el selector de carpetas. Verificá que estés usando la aplicación de escritorio (no el navegador).' });
+      const msg = err?.message || err?.toString?.() || 'Error desconocido';
+      setDbMsg({ type: 'err', text: `Error al abrir el selector de carpetas: ${msg}` });
     } finally {
       setDbChanging(false);
     }
