@@ -1,9 +1,10 @@
 {
   "identifier": "default",
   "description": "Default permissions",
-  "windows": ["*"],
+  "windows": ["main"],
   "permissions": [
     "core:default",
-    "dialog:default"
+    "dialog:default",
+    "pick-folder"
   ]
 }
