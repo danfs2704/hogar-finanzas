@@ -4,6 +4,19 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "dialog:allow-open"
+    {
+      "identifier": "dialog:allow-open",
+      "allow": [
+        { "path": "$APPDATA/**" },
+        { "path": "$HOME/**" },
+        { "path": "$DOWNLOAD/**" },
+        { "path": "$DESKTOP/**" },
+        { "path": "$DOCUMENT/**" }
+      ]
+    },
+    "dialog:allow-save",
+    "dialog:allow-message",
+    "dialog:allow-ask",
+    "dialog:allow-confirm"
   ]
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -45,6 +45,68 @@ export default function LoginView() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  // First-run DB location state
+  const [isFirstRun, setIsFirstRun] = useState<boolean | null>(null);
+  const [dbPath, setDbPath] = useState('');
+  const [dbLoading, setDbLoading] = useState(false);
+  const [dbMsg, setDbMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [dbChosen, setDbChosen] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/setup/check')
+      .then(r => r.ok ? r.json() : { isFirstRun: false })
+      .then(data => {
+        setIsFirstRun(data.isFirstRun);
+        if (data.isFirstRun) setTab('register');
+      });
+    fetch('/api/settings/db-path')
+      .then(r => r.ok ? r.json() : { path: '' })
+      .then(data => setDbPath(data.path || ''));
+  }, []);
+
+  const handleChooseDbLocation = async () => {
+    setDbLoading(true);
+    setDbMsg(null);
+    try {
+      let folder: string | null = null;
+      const tauriWin = window as any;
+
+      // Method 1: global __TAURI__.dialog.open
+      if (tauriWin.__TAURI__?.dialog?.open) {
+        folder = await tauriWin.__TAURI__.dialog.open({
+          directory: true,
+          title: 'Elegir ubicacion para la base de datos',
+        });
+      }
+      // Method 2: __TAURI_INTERNALS__ invoke
+      else if (tauriWin.__TAURI_INTERNALS__) {
+        folder = await tauriWin.__TAURI_INTERNALS__.invoke('plugin:dialog|open', {
+          options: { directory: true, title: 'Elegir ubicacion para la base de datos' },
+        });
+      }
+
+      if (!folder) { setDbLoading(false); return; }
+
+      const res = await fetch('/api/settings/db-path', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: folder }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setDbPath(data.path);
+        setDbChosen(true);
+        setDbMsg({ type: 'ok', text: 'Ubicacion elegida. La base de datos se usara en esta ubicacion al reiniciar la aplicacion.' });
+      } else {
+        setDbMsg({ type: 'err', text: data.error || 'Error al guardar' });
+      }
+    } catch (err: any) {
+      const msg = err?.message || String(err);
+      setDbMsg({ type: 'err', text: `Error: ${msg}` });
+    }
+    setDbLoading(false);
+  };
+
   const clearMessages = () => { setError(''); setSuccess(''); };
 
   const handleLogin = () => {
@@ -57,15 +119,15 @@ export default function LoginView() {
     }).then(async r => {
       const data = await r.json();
       if (r.ok) { setUser(data as User); localStorage.setItem('user', JSON.stringify(data)); }
-      else setError(data.error || 'Error al iniciar sesión');
-    }).catch(() => setError('Error de conexión')).finally(() => setLoading(false));
+      else setError(data.error || 'Error al iniciar sesion');
+    }).catch(() => setError('Error de conexion')).finally(() => setLoading(false));
   };
 
   const handleRegister = () => {
-    if (!regName || !regPass) { setError('Nombre y contraseña son requeridos'); return; }
-    if (regPass.length < 6) { setError('La contraseña debe tener al menos 6 caracteres'); return; }
-    if (!regSecurityQ) { setError('Seleccioná una pregunta de seguridad'); return; }
-    if (!regSecurityA || regSecurityA.trim().length < 2) { setError('La respuesta de seguridad es requerida (mín. 2 caracteres)'); return; }
+    if (!regName || !regPass) { setError('Nombre y contrasena son requeridos'); return; }
+    if (regPass.length < 6) { setError('La contrasena debe tener al menos 6 caracteres'); return; }
+    if (!regSecurityQ) { setError('Selecciona una pregunta de seguridad'); return; }
+    if (!regSecurityA || regSecurityA.trim().length < 2) { setError('La respuesta de seguridad es requerida (min. 2 caracteres)'); return; }
     setLoading(true); setError('');
     fetch('/api/auth', {
       method: 'POST',
@@ -80,7 +142,7 @@ export default function LoginView() {
       } else {
         setError(data.error || 'Error al registrarse');
       }
-    }).catch(() => setError('Error de conexión')).finally(() => setLoading(false));
+    }).catch(() => setError('Error de conexion')).finally(() => setLoading(false));
   };
 
   const handleForgotStep1 = () => {
@@ -105,12 +167,12 @@ export default function LoginView() {
       } else {
         setError(data.error || 'Usuario/email no encontrado');
       }
-    }).catch(() => setError('Error de conexión')).finally(() => setLoading(false));
+    }).catch(() => setError('Error de conexion')).finally(() => setLoading(false));
   };
 
   const handleForgotStep2 = () => {
-    if (!forgotAnswer || !forgotNewPass) { setError('Completá todos los campos'); return; }
-    if (forgotNewPass.length < 6) { setError('La nueva contraseña debe tener al menos 6 caracteres'); return; }
+    if (!forgotAnswer || !forgotNewPass) { setError('Completa todos los campos'); return; }
+    if (forgotNewPass.length < 6) { setError('La nueva contrasena debe tener al menos 6 caracteres'); return; }
     setLoading(true); setError('');
     fetch('/api/auth', {
       method: 'POST',
@@ -125,7 +187,7 @@ export default function LoginView() {
       } else {
         setError(data.error || 'Error al restablecer');
       }
-    }).catch(() => setError('Error de conexión')).finally(() => setLoading(false));
+    }).catch(() => setError('Error de conexion')).finally(() => setLoading(false));
   };
 
   const handleKeyDown = (e: React.KeyboardEvent, fn: () => void) => {
@@ -140,11 +202,44 @@ export default function LoginView() {
             <DynamicIcon name="Wallet" className="w-8 h-8 text-emerald-600" />
           </div>
           <CardTitle className="text-2xl font-bold text-slate-800">Hogar Finanzas</CardTitle>
-          <CardDescription>Gestioná las finanzas de tu hogar de forma simple</CardDescription>
+          <CardDescription>Gestiona las finanzas de tu hogar de forma simple</CardDescription>
         </CardHeader>
         <CardContent>
           {error && <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>}
           {success && <div className="mb-4 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm">{success}</div>}
+
+          {/* First-run DB location prompt */}
+          {isFirstRun && (
+            <div className="mb-4 p-4 rounded-xl bg-amber-50 border border-amber-200 space-y-3">
+              <div className="flex items-center gap-2">
+                <DynamicIcon name="Database" className="w-5 h-5 text-amber-600" />
+                <p className="text-sm font-semibold text-amber-800">Bienvenido - Configuracion inicial</p>
+              </div>
+              <p className="text-xs text-amber-700">
+                Antes de crear tu cuenta, podes elegir donde guardar la base de datos.
+                Si no elegis una ubicacion, se usara la ubicacion predeterminada.
+              </p>
+              <div className="text-xs text-amber-600 font-mono bg-amber-100/50 px-2 py-1 rounded break-all">
+                {dbPath || 'Cargando...'}
+              </div>
+              {dbMsg && (
+                <div className={`text-xs p-2 rounded ${dbMsg.type === 'ok' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
+                  {dbMsg.text}
+                </div>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full border-amber-300 text-amber-800 hover:bg-amber-100"
+                onClick={handleChooseDbLocation}
+                disabled={dbLoading}
+              >
+                <DynamicIcon name={dbLoading ? 'Loader2' : 'FolderOpen'} className={`w-4 h-4 mr-2 ${dbLoading ? 'animate-spin' : ''}`} />
+                {dbChosen ? 'Cambiar Ubicacion' : 'Elegir Ubicacion Personalizada'}
+              </Button>
+            </div>
+          )}
+
           <Tabs value={tab} onValueChange={(v) => { setTab(v); clearMessages(); setForgotStep(1); setForgotAdmins(null); }}>
             <TabsList className="grid w-full grid-cols-3 mb-4">
               <TabsTrigger value="login" className="text-xs">Ingresar</TabsTrigger>
@@ -164,8 +259,8 @@ export default function LoginView() {
                 <Input id="li" value={loginId} onChange={e => setLoginId(e.target.value)} placeholder="tu_usuario o tu@email.com" onKeyDown={e => handleKeyDown(e, handleLogin)} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="lp">Contraseña</Label>
-                <Input id="lp" type="password" value={loginPass} onChange={e => setLoginPass(e.target.value)} placeholder="••••••" onKeyDown={e => handleKeyDown(e, handleLogin)} />
+                <Label htmlFor="lp">Contrasena</Label>
+                <Input id="lp" type="password" value={loginPass} onChange={e => setLoginPass(e.target.value)} placeholder="......" onKeyDown={e => handleKeyDown(e, handleLogin)} />
               </div>
               <Button className="w-full bg-emerald-600 hover:bg-emerald-700" onClick={handleLogin} disabled={loading || !loginId || !loginPass}>
                 {loading ? 'Ingresando...' : 'Ingresar'}
@@ -175,23 +270,23 @@ export default function LoginView() {
             {/* REGISTER */}
             <TabsContent value="register" className="space-y-3">
               <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs mb-2">
-                Se creará tu cuenta de administrador. Elegí una pregunta de seguridad para poder recuperar tu contraseña.
+                Se creara tu cuenta de administrador. Elige una pregunta de seguridad para poder recuperar tu contrasena.
               </div>
               <div className="space-y-2">
                 <Label>Nombre completo *</Label>
-                <Input value={regName} onChange={e => setRegName(e.target.value)} placeholder="Juan Pérez" />
+                <Input value={regName} onChange={e => setRegName(e.target.value)} placeholder="Juan Perez" />
               </div>
               <div className="space-y-2">
-                <Label>Nombre de usuario (opcional, se genera automáticamente)</Label>
-                <Input value={regUsername} onChange={e => setRegUsername(e.target.value)} placeholder="Dejar vacío para generar uno automáticamente" />
+                <Label>Nombre de usuario (opcional, se genera automaticamente)</Label>
+                <Input value={regUsername} onChange={e => setRegUsername(e.target.value)} placeholder="Dejar vacio para generar uno automaticamente" />
               </div>
               <div className="space-y-2">
                 <Label>Email (opcional)</Label>
                 <Input type="email" value={regEmail} onChange={e => setRegEmail(e.target.value)} placeholder="juan@ejemplo.com" />
               </div>
               <div className="space-y-2">
-                <Label>Contraseña (mín. 6 caracteres) *</Label>
-                <Input type="password" value={regPass} onChange={e => setRegPass(e.target.value)} placeholder="••••••" />
+                <Label>Contrasena (min. 6 caracteres) *</Label>
+                <Input type="password" value={regPass} onChange={e => setRegPass(e.target.value)} placeholder="......" />
               </div>
               <div className="space-y-2">
                 <Label>Pregunta de seguridad *</Label>
@@ -200,7 +295,7 @@ export default function LoginView() {
                   value={regSecurityQ}
                   onChange={e => setRegSecurityQ(e.target.value)}
                 >
-                  <option value="">— Seleccioná una pregunta —</option>
+                  <option value="">— Selecciona una pregunta —</option>
                   {SECURITY_QUESTIONS.map(q => (
                     <option key={q} value={q}>{q}</option>
                   ))}
@@ -225,17 +320,17 @@ export default function LoginView() {
                       <p className="text-xs text-blue-600 font-medium mb-1">Administradores:</p>
                       {forgotAdmins.map(a => (
                         <p key={a.email || a.name} className="text-sm text-blue-700">
-                          • {a.name}{a.email ? ` — <span className="font-mono">${a.email}</span>` : ''}
+                          - {a.name}{a.email ? ` — <span className="font-mono">{a.email}</span>` : ''}
                         </p>
                       ))}
-                      <p className="text-xs text-blue-500 mt-3">Pedile al administrador que te restablezca la contraseña desde Configuración → Usuarios.</p>
+                      <p className="text-xs text-blue-500 mt-3">Pedi al administrador que te restablezca la contrasena desde Configuracion - Usuarios.</p>
                     </div>
                     <Button variant="outline" className="w-full" onClick={() => { setForgotAdmins(null); setForgotAdminMsg(''); setForgotId(''); }}>Volver</Button>
                   </div>
                 ) : (
                   <>
                     <p className="text-sm text-slate-600 mb-2">
-                      Ingresá tu usuario o email para recuperar tu contraseña.
+                      Ingresa tu usuario o email para recuperar tu contrasena.
                     </p>
                     <div className="space-y-2">
                       <Label>Usuario o Email</Label>
@@ -257,12 +352,12 @@ export default function LoginView() {
                     <Input value={forgotAnswer} onChange={e => setForgotAnswer(e.target.value)} placeholder="Tu respuesta" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Nueva contraseña (mín. 6 caracteres)</Label>
-                    <Input type="password" value={forgotNewPass} onChange={e => setForgotNewPass(e.target.value)} placeholder="••••••" onKeyDown={e => handleKeyDown(e, handleForgotStep2)} />
+                    <Label>Nueva contrasena (min. 6 caracteres)</Label>
+                    <Input type="password" value={forgotNewPass} onChange={e => setForgotNewPass(e.target.value)} placeholder="......" onKeyDown={e => handleKeyDown(e, handleForgotStep2)} />
                   </div>
                   <div className="flex gap-2">
                     <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={handleForgotStep2} disabled={loading || !forgotAnswer || !forgotNewPass}>
-                      {loading ? 'Verificando...' : 'Restablecer Contraseña'}
+                      {loading ? 'Verificando...' : 'Restablecer Contrasena'}
                     </Button>
                     <Button variant="outline" onClick={() => { setForgotStep(1); setForgotAnswer(''); setForgotNewPass(''); setForgotQuestion(''); clearMessages(); }}>Volver</Button>
                   </div>
