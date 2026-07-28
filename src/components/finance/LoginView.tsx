@@ -27,10 +27,12 @@ export default function LoginView() {
   const [loginId, setLoginId] = useState('');
   const [loginPass, setLoginPass] = useState('');
   const [regName, setRegName] = useState('');
+  const [regUsername, setRegUsername] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPass, setRegPass] = useState('');
   const [regSecurityQ, setRegSecurityQ] = useState('');
   const [regSecurityA, setRegSecurityA] = useState('');
+  const [regSuccess, setRegSuccess] = useState<{ username: string } | null>(null);
   const [forgotId, setForgotId] = useState('');
   const [forgotStep, setForgotStep] = useState<1 | 2>(1);
   const [forgotQuestion, setForgotQuestion] = useState('');
@@ -68,11 +70,16 @@ export default function LoginView() {
     fetch('/api/auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'register', name: regName, email: regEmail || undefined, password: regPass, securityQuestion: regSecurityQ, securityAnswer: regSecurityA }),
+      body: JSON.stringify({ action: 'register', name: regName, username: regUsername || undefined, email: regEmail || undefined, password: regPass, securityQuestion: regSecurityQ, securityAnswer: regSecurityA }),
     }).then(async r => {
       const data = await r.json();
-      if (r.ok) { setUser(data as User); localStorage.setItem('user', JSON.stringify(data)); }
-      else setError(data.error || 'Error al registrarse');
+      if (r.ok) {
+        setRegSuccess({ username: data.username });
+        setLoginId(data.username);
+        setTab('login');
+      } else {
+        setError(data.error || 'Error al registrarse');
+      }
     }).catch(() => setError('Error de conexión')).finally(() => setLoading(false));
   };
 
@@ -147,6 +154,11 @@ export default function LoginView() {
 
             {/* LOGIN */}
             <TabsContent value="login" className="space-y-3">
+              {regSuccess && (
+                <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm">
+                  Cuenta creada. Tu usuario es: <strong>{regSuccess.username}</strong>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="li">Usuario o Email</Label>
                 <Input id="li" value={loginId} onChange={e => setLoginId(e.target.value)} placeholder="tu_usuario o tu@email.com" onKeyDown={e => handleKeyDown(e, handleLogin)} />
@@ -163,11 +175,15 @@ export default function LoginView() {
             {/* REGISTER */}
             <TabsContent value="register" className="space-y-3">
               <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs mb-2">
-                Se creará tu cuenta de administrador. Elegí una pregunta de seguridad para poder recuperar tu contraseña en el futuro.
+                Se creará tu cuenta de administrador. Elegí una pregunta de seguridad para poder recuperar tu contraseña.
               </div>
               <div className="space-y-2">
                 <Label>Nombre completo *</Label>
                 <Input value={regName} onChange={e => setRegName(e.target.value)} placeholder="Juan Pérez" />
+              </div>
+              <div className="space-y-2">
+                <Label>Nombre de usuario (opcional, se genera automáticamente)</Label>
+                <Input value={regUsername} onChange={e => setRegUsername(e.target.value)} placeholder="Dejar vacío para generar uno automáticamente" />
               </div>
               <div className="space-y-2">
                 <Label>Email (opcional)</Label>
@@ -203,7 +219,6 @@ export default function LoginView() {
             <TabsContent value="forgot" className="space-y-3">
               {forgotStep === 1 ? (
                 forgotAdmins ? (
-                  // Fallback: show admins (no security question set)
                   <div className="space-y-3">
                     <div className="p-4 rounded-lg bg-blue-50 border border-blue-200">
                       <p className="text-sm text-blue-800 font-medium mb-2">{forgotAdminMsg}</p>
@@ -220,8 +235,7 @@ export default function LoginView() {
                 ) : (
                   <>
                     <p className="text-sm text-slate-600 mb-2">
-                      Ingresá tu usuario o email. Si tenés pregunta de seguridad configurada,
-                      podrás restablecer tu contraseña directamente.
+                      Ingresá tu usuario o email para recuperar tu contraseña.
                     </p>
                     <div className="space-y-2">
                       <Label>Usuario o Email</Label>
@@ -233,7 +247,6 @@ export default function LoginView() {
                   </>
                 )
               ) : (
-                // Step 2: answer security question
                 <>
                   <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm mb-2">
                     <p className="font-medium">Pregunta de seguridad:</p>

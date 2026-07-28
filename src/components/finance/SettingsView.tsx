@@ -303,12 +303,10 @@ export default function SettingsView() {
                 {dbMsg.text}
               </div>
             )}
-            {isTauri && (
-              <Button variant="outline" className="gap-2" onClick={handleChangeDbLocation} disabled={dbChanging}>
-                <DynamicIcon name={dbChanging ? 'Loader2' : 'FolderOpen'} className={`w-4 h-4 ${dbChanging ? 'animate-spin' : ''}`} />
-                {dbChanging ? 'Copiando...' : 'Cambiar Ubicación'}
-              </Button>
-            )}
+            <Button variant="outline" className="gap-2" onClick={handleChangeDbLocation} disabled={dbChanging}>
+              <DynamicIcon name={dbChanging ? 'Loader2' : 'FolderOpen'} className={`w-4 h-4 ${dbChanging ? 'animate-spin' : ''}`} />
+              {dbChanging ? 'Copiando...' : 'Cambiar Ubicación'}
+            </Button>
             <p className="text-xs text-slate-400">
               Si ya existe un archivo <code className="text-slate-500">data.db</code> en la carpeta seleccionada, se usará esa base de datos.
               Si no existe, se creará una copia de la actual en la nueva ubicación.
