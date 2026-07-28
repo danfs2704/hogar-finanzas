@@ -4,6 +4,6 @@
   "windows": ["*"],
   "permissions": [
     "core:default",
-    "pick_db_folder"
+    "dialog:default"
   ]
 }
