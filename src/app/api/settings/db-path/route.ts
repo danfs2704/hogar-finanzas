@@ -1,18 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readFile, writeFile, mkdir, copyFile } from 'fs/promises';
-import { existsSync } from 'fs';
+import { readFile, writeFile, mkdir, copyFile, access, stat } from 'fs/promises';
+import { existsSync, constants } from 'fs';
 import path from 'path';
 
 function getConfigPath(): string {
   const dir = process.env.APP_DATA_DIR;
   if (dir) return path.join(dir, 'config.json');
-  // Fallback for dev
   return path.join(process.cwd(), 'config.json');
 }
 
 function getCurrentDbPath(): string {
   const url = process.env.DATABASE_URL || '';
-  // Extract path from "file:/path/to/data.db"
   const match = url.match(/^file:(.+)/);
   return match ? match[1] : path.join(process.cwd(), 'data.db');
 }
@@ -37,12 +35,11 @@ export async function GET() {
     const dbFile = path.join(dbDir, 'data.db');
     return NextResponse.json({ path: dbFile });
   } catch (error) {
-    // If config can't be read, return the env var path
     return NextResponse.json({ path: getCurrentDbPath() });
   }
 }
 
-// POST — change DB location (copy DB + save config)
+// POST — change DB location
 export async function POST(request: NextRequest) {
   try {
     const { path: newDir } = await request.json();
@@ -51,13 +48,19 @@ export async function POST(request: NextRequest) {
     // Ensure target directory exists
     await mkdir(newDir, { recursive: true });
 
-    const currentDbPath = getCurrentDbPath();
     const newDbPath = path.join(newDir, 'data.db');
+    const existingDbInTarget = existsSync(newDbPath);
+    const currentDbPath = getCurrentDbPath();
 
-    // Copy current DB to new location if it exists
-    if (existsSync(currentDbPath)) {
+    if (existingDbInTarget) {
+      // An existing DB was found at the target — use it
+      console.log(`[db-path] Found existing data.db at ${newDbPath} — switching to it`);
+    } else if (existsSync(currentDbPath)) {
+      // No existing DB at target — copy current DB there
       await copyFile(currentDbPath, newDbPath);
+      console.log(`[db-path] Copied ${currentDbPath} to ${newDbPath}`);
     }
+    // else: neither exists — a new empty DB will be created when the app restarts
 
     // Save config
     const configPath = getConfigPath();
@@ -66,7 +69,7 @@ export async function POST(request: NextRequest) {
 
     await writeFile(configPath, JSON.stringify({ dbPath: newDir }, null, 2), 'utf-8');
 
-    return NextResponse.json({ path: newDbPath });
+    return NextResponse.json({ path: newDbPath, usedExisting: existingDbInTarget });
   } catch (error: any) {
     console.error('DB path change error:', error);
     return NextResponse.json({ error: error.message || 'Error al cambiar la ubicación' }, { status: 500 });

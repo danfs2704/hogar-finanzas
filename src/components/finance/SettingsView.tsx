@@ -10,6 +10,17 @@ import { Badge } from '@/components/ui/badge';
 import { DynamicIcon } from '@/lib/icons';
 import { useAppStore } from '@/store/useAppStore';
 
+const SECURITY_QUESTIONS = [
+  '¿Cuál es el nombre de tu primera mascota?',
+  '¿En qué ciudad naciste?',
+  '¿Cuál es tu comida favorita?',
+  '¿Cuál es el apellido de soltera de tu madre?',
+  '¿Cuál fue tu primer auto?',
+  '¿Cómo se llama tu mejor amigo de la infancia?',
+  '¿Cuál es tu película favorita?',
+  '¿En qué escuela primaria estudiaste?',
+];
+
 interface StatsData {
   _count: { users: number; accounts: number; transactions: number };
 }
@@ -28,10 +39,20 @@ export default function SettingsView() {
   const [pwLoading, setPwLoading] = useState(false);
   const [pwMsg, setPwMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
+  // Security question state
+  const [showSqForm, setShowSqForm] = useState(false);
+  const [sqQuestion, setSqQuestion] = useState('');
+  const [sqAnswer, setSqAnswer] = useState('');
+  const [sqLoading, setSqLoading] = useState(false);
+  const [sqMsg, setSqMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [hasSecurityQ, setHasSecurityQ] = useState(false);
+
   // DB location state
   const [dbPath, setDbPath] = useState('Cargando...');
   const [dbChanging, setDbChanging] = useState(false);
   const [dbMsg, setDbMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+
+  const isTauri = typeof window !== 'undefined' && !!(window as any).__TAURI__;
 
   useEffect(() => {
     if (!householdId) return;
@@ -68,9 +89,30 @@ export default function SettingsView() {
     }).catch(() => setPwMsg({ type: 'err', text: 'Error de conexión' })).finally(() => setPwLoading(false));
   };
 
+  const handleSaveSecurityQuestion = () => {
+    if (!user?.id) return;
+    if (!sqQuestion) { setSqMsg({ type: 'err', text: 'Seleccioná una pregunta' }); return; }
+    if (!sqAnswer || sqAnswer.trim().length < 2) { setSqMsg({ type: 'err', text: 'La respuesta es requerida (mín. 2 caracteres)' }); return; }
+    setSqLoading(true);
+    setSqMsg(null);
+    fetch('/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'updateSecurityQuestion', userId: user.id, securityQuestion: sqQuestion, securityAnswer: sqAnswer }),
+    }).then(r => r.json()).then(data => {
+      if (data.success) {
+        setSqMsg({ type: 'ok', text: 'Pregunta de seguridad guardada correctamente' });
+        setHasSecurityQ(true);
+        setShowSqForm(false);
+        setSqAnswer('');
+      } else {
+        setSqMsg({ type: 'err', text: data.error || 'Error al guardar' });
+      }
+    }).catch(() => setSqMsg({ type: 'err', text: 'Error de conexión' })).finally(() => setSqLoading(false));
+  };
+
   const handleChangeDbLocation = async () => {
     try {
-      // Dynamically import Tauri dialog plugin (only available in desktop app)
       const { open } = await import('@tauri-apps/plugin-dialog');
       const folder = await open({
         directory: true,
@@ -88,12 +130,12 @@ export default function SettingsView() {
       const data = await res.json();
       if (res.ok) {
         setDbPath(data.path);
-        setDbMsg({ type: 'ok', text: 'Ubicación cambiada. La base de datos fue copiada. Reiniciá la aplicación para usar la nueva ubicación.' });
+        setDbMsg({ type: 'ok', text: 'Ubicación cambiada correctamente. La base de datos fue copiada a la nueva carpeta. Reiniciá la aplicación para usar la nueva ubicación.' });
       } else {
         setDbMsg({ type: 'err', text: data.error || 'Error al cambiar la ubicación' });
       }
     } catch {
-      setDbMsg({ type: 'err', text: 'No se pudo abrir el selector de carpetas. Verificá que estés usando la aplicación de escritorio.' });
+      setDbMsg({ type: 'err', text: 'No se pudo abrir el selector de carpetas.' });
     } finally {
       setDbChanging(false);
     }
@@ -104,8 +146,6 @@ export default function SettingsView() {
     { label: 'Cuentas', value: stats?._count.accounts ?? 0, icon: 'Wallet', color: 'text-blue-600', bg: 'bg-blue-50' },
     { label: 'Transacciones', value: stats?._count.transactions ?? 0, icon: 'Receipt', color: 'text-violet-600', bg: 'bg-violet-50' },
   ];
-
-  const isTauri = typeof window !== 'undefined' && !!(window as any).__TAURI__;
 
   return (
     <div className="space-y-6">
@@ -162,6 +202,7 @@ export default function SettingsView() {
             </div>
           </div>
 
+          {/* Password change */}
           <div className="mt-6">
             {pwMsg && (
               <div className={`mb-3 p-3 rounded-lg text-sm ${pwMsg.type === 'ok' ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
@@ -188,6 +229,48 @@ export default function SettingsView() {
                     {pwLoading ? 'Guardando...' : 'Actualizar Contraseña'}
                   </Button>
                   <Button variant="outline" onClick={() => { setShowPwForm(false); setNewPassword(''); setConfirmPassword(''); setPwMsg(null); }}>Cancelar</Button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Security question */}
+          <div className="mt-6">
+            {sqMsg && (
+              <div className={`mb-3 p-3 rounded-lg text-sm ${sqMsg.type === 'ok' ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
+                {sqMsg.text}
+              </div>
+            )}
+            {!showSqForm ? (
+              <Button variant="outline" className="gap-2" onClick={() => { setShowSqForm(true); setSqMsg(null); }}>
+                <DynamicIcon name="ShieldCheck" className="w-4 h-4" />
+                {hasSecurityQ ? 'Cambiar Pregunta de Seguridad' : 'Configurar Pregunta de Seguridad'}
+              </Button>
+            ) : (
+              <div className="space-y-3 p-4 rounded-lg bg-slate-50 border">
+                <p className="text-sm font-medium text-slate-700">Pregunta de seguridad para recuperación de contraseña</p>
+                <div className="space-y-2">
+                  <Label className="text-xs">Pregunta</Label>
+                  <select
+                    className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    value={sqQuestion}
+                    onChange={e => setSqQuestion(e.target.value)}
+                  >
+                    <option value="">— Seleccioná una pregunta —</option>
+                    {SECURITY_QUESTIONS.map(q => (
+                      <option key={q} value={q}>{q}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Tu respuesta</Label>
+                  <Input value={sqAnswer} onChange={e => setSqAnswer(e.target.value)} placeholder="Tu respuesta" />
+                </div>
+                <div className="flex gap-2">
+                  <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleSaveSecurityQuestion} disabled={sqLoading || !sqQuestion || !sqAnswer}>
+                    {sqLoading ? 'Guardando...' : 'Guardar Pregunta'}
+                  </Button>
+                  <Button variant="outline" onClick={() => { setShowSqForm(false); setSqQuestion(''); setSqAnswer(''); setSqMsg(null); }}>Cancelar</Button>
                 </div>
               </div>
             )}
@@ -227,8 +310,9 @@ export default function SettingsView() {
               </Button>
             )}
             <p className="text-xs text-slate-400">
-              Podés elegir dónde guardar la base de datos (por ejemplo, en un pendrive o carpeta de respaldo).
-              Al cambiar la ubicación, el archivo actual se copia a la nueva carpeta.
+              Si ya existe un archivo <code className="text-slate-500">data.db</code> en la carpeta seleccionada, se usará esa base de datos.
+              Si no existe, se creará una copia de la actual en la nueva ubicación.
+              Después de cambiar la ubicación, reiniciá la aplicación.
             </p>
           </div>
         </CardContent>

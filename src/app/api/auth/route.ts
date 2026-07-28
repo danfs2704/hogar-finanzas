@@ -6,7 +6,7 @@ function generateUsername(name: string, householdId: string): string {
   const base = name
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // remove accents
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]/g, '')
     .slice(0, 12);
   const suffix = householdId.slice(-4).toLowerCase();
@@ -172,11 +172,10 @@ async function seedCategoriesForHousehold(householdId: string) {
 
 export async function POST(request: NextRequest) {
   try {
-    // Wait for schema migration to complete before any DB operation
     await dbReady;
 
     const body = await request.json();
-    const { action, email, username, password, name, householdId, userId } = body;
+    const { action, email, username, password, name, householdId, userId, securityQuestion, securityAnswer } = body;
 
     // LOGIN
     if (action === 'login') {
@@ -206,18 +205,15 @@ export async function POST(request: NextRequest) {
       if (password.length < 6) return NextResponse.json({ error: 'La contraseña debe tener al menos 6 caracteres' }, { status: 400 });
 
       if (householdId) {
-        // Join existing household
         const household = await db.household.findUnique({ where: { id: householdId } });
         if (!household) return NextResponse.json({ error: 'Hogar no encontrado. Verificá el código.' }, { status: 404 });
 
-        // Check uniqueness: username must be unique within household
         let finalUsername = username || generateUsername(name, householdId);
         const existingUname = await db.user.findFirst({ where: { username: finalUsername, householdId } });
         if (existingUname) {
           finalUsername = `${finalUsername}_${Date.now().toString(36).slice(-4)}`;
         }
 
-        // If email provided, check it's not already used in this household
         if (email) {
           const existing = await db.user.findFirst({ where: { email, householdId } });
           if (existing) return NextResponse.json({ error: 'Este email ya está registrado en este hogar' }, { status: 400 });
@@ -225,39 +221,100 @@ export async function POST(request: NextRequest) {
 
         const hashed = await bcrypt.hash(password, 10);
         const user = await db.user.create({
-          data: { email: email || null, username: finalUsername, password: hashed, name, role: 'member', householdId },
+          data: {
+            email: email || null, username: finalUsername, password: hashed, name, role: 'member', householdId,
+            securityQuestion: securityQuestion || '',
+            securityAnswer: securityAnswer ? await bcrypt.hash(securityAnswer.toLowerCase().trim(), 10) : '',
+          },
         });
         return NextResponse.json({ id: user.id, email: user.email, username: user.username, name: user.name, role: user.role, householdId, householdName: household.name });
       }
 
-      // Create new household
+      // Create new household (first user = admin)
       if (email) {
         const existingGlobal = await db.user.findFirst({ where: { email } });
         if (existingGlobal) return NextResponse.json({ error: 'Este email ya está registrado en otro hogar' }, { status: 400 });
       }
 
       const hashed = await bcrypt.hash(password, 10);
+      const hashedAnswer = securityAnswer ? await bcrypt.hash(securityAnswer.toLowerCase().trim(), 10) : '';
       const household = await db.household.create({
         data: {
           name: `Hogar de ${name}`,
-          users: { create: { email: email || null, username: '_pending', password: hashed, name, role: 'admin' } },
+          users: { create: {
+            email: email || null, username: '_pending', password: hashed, name, role: 'admin',
+            securityQuestion: securityQuestion || '',
+            securityAnswer: hashedAnswer,
+          } },
           accounts: { create: DEFAULT_ACCOUNTS },
         },
         include: { users: true },
       });
 
-      // Set proper username now that we have the householdId
       const user = household.users[0];
       const finalUsername = username || generateUsername(name, household.id);
       await db.user.update({ where: { id: user.id }, data: { username: finalUsername } });
 
-      // Seed default categories for the new household
       await seedCategoriesForHousehold(household.id);
 
       return NextResponse.json({ id: user.id, email: user.email, username: finalUsername, name: user.name, role: user.role, householdId: household.id, householdName: household.name });
     }
 
-    // FORGOT PASSWORD
+    // FORGOT PASSWORD — step 1: get security question
+    if (action === 'forgotStep1') {
+      const forgotId = username || email;
+      if (!forgotId) return NextResponse.json({ error: 'Usuario o email requerido' }, { status: 400 });
+
+      const user = await db.user.findFirst({
+        where: username
+          ? { username, householdId: { not: undefined } }
+          : { email: forgotId },
+      });
+      if (!user) return NextResponse.json({ error: 'Usuario/email no registrado' }, { status: 404 });
+
+      if (user.securityQuestion) {
+        return NextResponse.json({
+          step: 'answer',
+          userId: user.id,
+          question: user.securityQuestion,
+          username: user.username,
+        });
+      }
+
+      // No security question set — fallback to showing admins
+      const admins = await db.user.findMany({ where: { householdId: user.householdId, role: 'admin', isActive: true } });
+      return NextResponse.json({
+        step: 'admins',
+        message: 'Este usuario no tiene pregunta de seguridad configurada.',
+        admins: admins.map(a => ({ name: a.name, email: a.email })),
+      });
+    }
+
+    // FORGOT PASSWORD — step 2: verify answer and reset password
+    if (action === 'forgotStep2') {
+      if (!userId || !securityAnswer || !password) {
+        return NextResponse.json({ error: 'Datos incompletos' }, { status: 400 });
+      }
+      if (password.length < 6) {
+        return NextResponse.json({ error: 'La nueva contraseña debe tener al menos 6 caracteres' }, { status: 400 });
+      }
+
+      const user = await db.user.findUnique({ where: { id: userId } });
+      if (!user || !user.securityAnswer) {
+        return NextResponse.json({ error: 'Usuario no encontrado o sin pregunta de seguridad' }, { status: 404 });
+      }
+
+      const answerMatch = await bcrypt.compare(securityAnswer.toLowerCase().trim(), user.securityAnswer);
+      if (!answerMatch) {
+        return NextResponse.json({ error: 'Respuesta incorrecta' }, { status: 401 });
+      }
+
+      const hashed = await bcrypt.hash(password, 10);
+      await db.user.update({ where: { id: userId }, data: { password: hashed } });
+      return NextResponse.json({ success: true, message: 'Contraseña actualizada correctamente. Ya podés iniciar sesión.' });
+    }
+
+    // FORGOT PASSWORD — legacy fallback (for old UI)
     if (action === 'forgot') {
       const forgotId = username || email;
       if (!forgotId) return NextResponse.json({ error: 'Usuario o email requerido' }, { status: 400 });
@@ -293,6 +350,19 @@ export async function POST(request: NextRequest) {
       const hashed = await bcrypt.hash(password, 10);
       await db.user.update({ where: { id: userId }, data: { password: hashed } });
       return NextResponse.json({ success: true, message: 'Contraseña restablecida' });
+    }
+
+    // UPDATE SECURITY QUESTION
+    if (action === 'updateSecurityQuestion') {
+      if (!userId || !securityQuestion || !securityAnswer) {
+        return NextResponse.json({ error: 'Todos los campos son requeridos' }, { status: 400 });
+      }
+      const hashedAnswer = await bcrypt.hash(securityAnswer.toLowerCase().trim(), 10);
+      await db.user.update({
+        where: { id: userId },
+        data: { securityQuestion, securityAnswer: hashedAnswer },
+      });
+      return NextResponse.json({ success: true, message: 'Pregunta de seguridad actualizada' });
     }
 
     return NextResponse.json({ error: 'Acción no válida' }, { status: 400 });

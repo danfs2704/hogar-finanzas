@@ -210,6 +210,10 @@ async function ensureSchema(prisma: PrismaClient) {
     // Subcategory: add description column if missing
     await addColumnIfMissing(prisma, 'Subcategory', 'description', 'TEXT')
 
+    // User: add security question/answer columns
+    await addColumnIfMissing(prisma, 'User', 'securityQuestion', "TEXT DEFAULT ''")
+    await addColumnIfMissing(prisma, 'User', 'securityAnswer', "TEXT DEFAULT ''")
+
     // Transaction: add new columns if missing
     await addColumnIfMissing(prisma, 'Transaction', 'toAccountId', 'TEXT')
     await addColumnIfMissing(prisma, 'Transaction', 'memberId', 'TEXT')

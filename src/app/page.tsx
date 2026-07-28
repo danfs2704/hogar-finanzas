@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import LoginView from '@/components/finance/LoginView';
+import SetupView from '@/components/finance/SetupView';
 import Sidebar from '@/components/finance/Sidebar';
 import DashboardView from '@/components/finance/DashboardView';
 import AccountsView from '@/components/finance/AccountsView';
@@ -14,20 +15,57 @@ import UsersView from '@/components/finance/UsersView';
 import SettingsView from '@/components/finance/SettingsView';
 import { Button } from '@/components/ui/button';
 import { DynamicIcon } from '@/lib/icons';
-import { useState } from 'react';
 
 import type { User } from '@/types';
 
 export default function Home() {
   const { currentView, user, setUser } = useAppStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [setupDone, setSetupDone] = useState(false);
+  const [checkedSetup, setCheckedSetup] = useState(false);
 
+  // Restore user session
   useEffect(() => {
     const saved = localStorage.getItem('user');
     if (saved) {
       try { setUser(JSON.parse(saved) as User); } catch { /* ignore */ }
     }
   }, [setUser]);
+
+  // Check if this is a first run (no users in DB)
+  useEffect(() => {
+    if (setupDone) return; // skip if user already completed setup
+    const saved = localStorage.getItem('user');
+    if (saved) {
+      // User has a session — skip setup
+      setCheckedSetup(true);
+      setSetupDone(true);
+      return;
+    }
+    fetch('/api/setup/check')
+      .then(r => r.json())
+      .then(data => {
+        if (!data.isFirstRun) {
+          setSetupDone(true); // DB has users, skip setup
+        }
+        setCheckedSetup(true);
+      })
+      .catch(() => setCheckedSetup(true)); // on error, show login
+  }, [setupDone]);
+
+  // Show setup on first run
+  if (!setupDone && checkedSetup) {
+    return <SetupView onReady={() => { setSetupDone(true); }} />;
+  }
+
+  // Loading state while checking
+  if (!checkedSetup) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-teal-50">
+        <div className="text-slate-400 text-sm">Cargando...</div>
+      </div>
+    );
+  }
 
   if (!user) return <LoginView />;
 
