@@ -113,31 +113,32 @@ export default function SettingsView() {
 
   const handleChangeDbLocation = async () => {
     try {
-      const tauriWin = window as any;
-      let folder: string | null = null;
-
-      // Use custom Tauri command (bypasses plugin ACL)
-      if (tauriWin.__TAURI_INTERNALS__) {
-        folder = await tauriWin.__TAURI_INTERNALS__.invoke('pick_folder', {
-          title: 'Elegir nueva ubicacion para la base de datos',
-        });
-      }
-
-      if (!folder) return;
-
       setDbChanging(true);
       setDbMsg(null);
-      const res = await fetch('/api/settings/db-path', {
+      const res = await fetch('/api/pick-folder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'Elegir nueva ubicacion para la base de datos' }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setDbMsg({ type: 'err', text: data.error || 'Error al abrir selector de carpetas' });
+        return;
+      }
+      const folder = data.path;
+      if (!folder) return;
+
+      const dbRes = await fetch('/api/settings/db-path', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: folder }),
       });
-      const data = await res.json();
-      if (res.ok) {
-        setDbPath(data.path);
-        setDbMsg({ type: 'ok', text: 'Ubicación cambiada correctamente. La base de datos fue copiada a la nueva carpeta. Reiniciá la aplicación para usar la nueva ubicación.' });
+      const dbData = await dbRes.json();
+      if (dbRes.ok) {
+        setDbPath(dbData.path);
+        setDbMsg({ type: 'ok', text: 'Ubicacion cambiada correctamente. La base de datos fue copiada a la nueva carpeta. Reinicia la aplicacion para usar la nueva ubicacion.' });
       } else {
-        setDbMsg({ type: 'err', text: data.error || 'Error al cambiar la ubicación' });
+        setDbMsg({ type: 'err', text: dbData.error || 'Error al cambiar la ubicacion' });
       }
     } catch (err: any) {
       console.error('DB location error:', err);

@@ -68,30 +68,32 @@ export default function LoginView() {
     setDbLoading(true);
     setDbMsg(null);
     try {
-      const tauriWin = window as any;
-      let folder: string | null = null;
-
-      // Use custom Tauri command (bypasses plugin ACL)
-      if (tauriWin.__TAURI_INTERNALS__) {
-        folder = await tauriWin.__TAURI_INTERNALS__.invoke('pick_folder', {
-          title: 'Elegir ubicacion para la base de datos',
-        });
+      const res = await fetch('/api/pick-folder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'Elegir ubicacion para la base de datos' }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setDbMsg({ type: 'err', text: data.error || 'Error al abrir selector' });
+        setDbLoading(false);
+        return;
       }
-
+      const folder = data.path;
       if (!folder) { setDbLoading(false); return; }
 
-      const res = await fetch('/api/settings/db-path', {
+      const dbRes = await fetch('/api/settings/db-path', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: folder }),
       });
-      const data = await res.json();
-      if (res.ok) {
-        setDbPath(data.path);
+      const dbData = await dbRes.json();
+      if (dbRes.ok) {
+        setDbPath(dbData.path);
         setDbChosen(true);
         setDbMsg({ type: 'ok', text: 'Ubicacion elegida. La base de datos se usara en esta ubicacion al reiniciar la aplicacion.' });
       } else {
-        setDbMsg({ type: 'err', text: data.error || 'Error al guardar' });
+        setDbMsg({ type: 'err', text: dbData.error || 'Error al guardar' });
       }
     } catch (err: any) {
       const msg = err?.message || String(err);
