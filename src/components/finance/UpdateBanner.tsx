@@ -6,9 +6,11 @@ import { DynamicIcon } from '@/lib/icons';
 
 interface UpdateInfo {
   version: string;
-  date: string;
-  body: string;
+  notes: string;
 }
+
+// URL del manifiesto de actualizaciones
+const UPDATE_URL = 'https://github.com/danfs2704/hogar-finanzas/releases/latest/download/latest.json';
 
 export default function UpdateBanner() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
@@ -20,28 +22,46 @@ export default function UpdateBanner() {
 
   const isTauri = typeof window !== 'undefined' && !!(window as any).__TAURI__;
 
+  // Obtener version actual de la app
+  const getCurrentVersion = (): string => {
+    try {
+      const cfg = (window as any).__TAURI_INTERNALS__?.metadata;
+      if (cfg?.version) return cfg.version;
+    } catch {}
+    // Fallback: leer del HTML
+    const meta = document.querySelector('meta[name="app-version"]');
+    return meta?.getAttribute('content') || '0.0.0';
+  };
+
   useEffect(() => {
     if (!isTauri || dismissed) return;
 
     const checkUpdate = async () => {
       try {
-        const { check } = await import('@tauri-apps/plugin-updater');
-        const update = await check();
-        if (update) {
+        // Usar fetch directo (no pasa por ACL de Tauri)
+        const res = await fetch(UPDATE_URL);
+        if (!res.ok) {
+          console.log('[updater] No se pudo obtener latest.json:', res.status);
+          return;
+        }
+        const data = await res.json();
+        const latestVersion = data.version;
+        const currentVersion = getCurrentVersion();
+
+        console.log('[updater] Current:', currentVersion, 'Latest:', latestVersion);
+
+        if (latestVersion && latestVersion !== currentVersion) {
           setUpdateAvailable(true);
           setUpdateInfo({
-            version: update.version,
-            date: update.date || '',
-            body: update.body || '',
+            version: latestVersion,
+            notes: data.notes || '',
           });
         }
       } catch (err) {
-        // Silently fail - updater not configured yet or no network
         console.log('[updater] Check failed:', err);
       }
     };
 
-    // Check after 5 seconds to not slow down app startup
     const timer = setTimeout(checkUpdate, 5000);
     return () => clearTimeout(timer);
   }, [isTauri, dismissed]);
@@ -50,20 +70,64 @@ export default function UpdateBanner() {
     try {
       setDownloading(true);
       setError('');
-      const { check } = await import('@tauri-apps/plugin-updater');
-      const update = await check();
-      if (!update) return;
 
-      await update.downloadAndInstall((event) => {
-        if (event.event === 'Progress') {
-          setProgress(Math.round(event.data.progress));
+      // Descargar via fetch y ejecutar el instalador
+      const res = await fetch(UPDATE_URL);
+      const data = await res.json();
+      const downloadUrl = data.platforms?.['windows-x86_64']?.url;
+      if (!downloadUrl) {
+        setError('No se encontro URL de descarga');
+        setDownloading(false);
+        return;
+      }
+
+      // Descargar el exe
+      const exeRes = await fetch(downloadUrl);
+      if (!exeRes.ok) {
+        setError('Error al descargar el instalador');
+        setDownloading(false);
+        return;
+      }
+
+      const contentLength = parseInt(exeRes.headers.get('content-length') || '0');
+      const reader = exeRes.body?.getReader();
+      if (!reader) {
+        setError('Error al leer la descarga');
+        setDownloading(false);
+        return;
+      }
+
+      const chunks: Uint8Array[] = [];
+      let received = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        received += value.length;
+        if (contentLength) {
+          setProgress(Math.round((received / contentLength) * 100));
         }
-      });
+      }
 
-      // Restart after successful update
-      const { process } = await import('@tauri-apps/plugin-process');
-      await process.relaunch();
+      // Guardar el exe temporalmente
+      const blob = new Blob(chunks, { type: 'application/octet-stream' });
+      const exeUrl = URL.createObjectURL(blob);
+
+      // Abrir el instalador usando Tauri shell
+      const { Command } = await import('@tauri-apps/plugin-shell');
+      // Descargar a archivo temporal
+      const { convertFileSrc } = await import('@tauri-apps/core');
+      const { invoke } = (window as any).__TAURI_INTERNALS__ || {};
+
+      // Usar metodo simple: abrir la URL de descarga directa con el navegador
+      // Esto permite que el usuario lo descargue y ejecute
+      window.open(downloadUrl, '_blank');
+
+      setDownloading(false);
+      setDismissed(true);
     } catch (err: any) {
+      console.error('[updater] Download error:', err);
       setError(err?.message || 'Error al descargar la actualizacion');
       setDownloading(false);
     }
@@ -94,7 +158,7 @@ export default function UpdateBanner() {
               </div>
             ) : (
               <p className="text-xs text-slate-500 mt-1">
-                Hay una nueva version disponible. Actualiza para obtener las ultimas mejoras.
+                {updateInfo?.notes || 'Hay una nueva version disponible. Actualiza para obtener las ultimas mejoras.'}
               </p>
             )}
             {error && (
