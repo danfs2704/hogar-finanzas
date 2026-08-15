@@ -31,7 +31,7 @@
       "endpoints": [
         "https://github.com/danfs2704/hogar-finanzas/releases/latest/download/latest.json"
       ],
-      "pubkey": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1RFuSywG/BYBUMY2qwRLcCqC2UOHd8Vtr1bR5f/LfkuSMCqTjzB/TYUpAWw+iE7aodQ2QcusIs9D0zl0rMFG5hGHFHbNsxXuQCLXCQbmTPrpCsJ1fk2D9GFAR2wdMqpbln4BF622g86pok4umRvpjNnVmAmsAz4oxwRHDlMoQWBKGKBCHKp9jK5Z+Q5sno/+o/SJEe2Nq46xaLzlQjqnDTfOynK6N0tLE8G1bb2uXemJxzp6XtnU9TEhHMgPPTQlAzTC3XM7GXGcmOK6N/vTI9pUOG5xkxmJKQ9RD7aXd/cLtaMEo76fiW33UXqng4kT7EiCw8BGlDL4gHNN7urTmQIDAQAB"
+      "pubkey": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApkKuvyQobyhvSaCVKXkSJcCj8nxQSCOuFUXlBeZVulKiQ88i00LJev3vbHkTbA7myDAG1WRkyUV3j2TQpPBQbQUBRCxyuvZ8xeeD/OvbumWjCVz1oeGWAHTOFjYJ699Z+ItOTY5Rh0m0+zotCdQjNpkGlwapk4skGgPsfAAqRHxgG2JqtnbFs+j7D/xy1bwdMIc7wz23yp9kVfZk58dItEX/vyg4F+SCj9yhlSiFjgBi0FA10GdS6UIE2HAUFFXcef69J7hO3EDWZQEMqyLEes2pUBmOiVS1uXUh3UJTTqeXMrNofyq/uYa0GNzk0taPurcHEN1ziRLIZy/m4yJp7wIDAQAB"
     }
   },
   "bundle": {
