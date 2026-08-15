@@ -75,6 +75,17 @@ export function parseLatam(value: string): number {
     return parseFloat(cleaned.replace(',', '.')) || 0;
   }
 
+  // Single dot: could be thousands separator (810.000 = 810000) or decimal (810.5 = 810.5)
+  // In this app, formatInputValue always produces dots as thousands separators.
+  // Heuristic: if dot is followed by exactly 3 digits at end of string → thousands separator.
+  if (hasDot && dotCount === 1 && !hasComma) {
+    const afterDot = cleaned.slice(lastDot + 1);
+    if (afterDot.length === 3 && /^\d+$/.test(afterDot)) {
+      // "810.000" → 810000 (thousands separator)
+      return parseFloat(cleaned.replace(/\./g, '')) || 0;
+    }
+  }
+
   // Single dot or no separators → standard/US format or plain number
   return parseFloat(cleaned.replace(/,/g, '')) || 0;
 }
