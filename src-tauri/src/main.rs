@@ -93,6 +93,9 @@ fn main() {
     let _ = std::fs::create_dir_all(&app_data);
     let app_data_str = app_data.to_string_lossy().to_string();
 
+    // Guardar el PID del proceso Node.js para que el instalador pueda matarlo
+    let node_pid_path = app_data.join("node.pid");
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
@@ -136,6 +139,14 @@ fn main() {
 
             match cmd.spawn() {
                 Ok(child) => {
+                    let pid = child.id();
+                    write_log(&format!("Node.js PID: {}", pid));
+
+                    // Guardar PID para que el instalador lo use
+                    if let Ok(mut f) = OpenOptions::new().create(true).write(true).truncate(true).open(&node_pid_path) {
+                        let _ = writeln!(f, "{}", pid);
+                    }
+
                     *app.state::<ServerHandle>().0.lock().unwrap() = Some(child);
                     write_log("Node.js server started (hidden window)");
 
@@ -170,6 +181,9 @@ fn main() {
                         }
                     };
                 }
+                // Limpiar archivo PID
+                let pid_path = app_data_dir().join("node.pid");
+                let _ = std::fs::remove_file(&pid_path);
             }
         })
         .run(tauri::generate_context!())

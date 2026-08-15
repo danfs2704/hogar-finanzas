@@ -70,4 +70,4 @@ src-tauri/gen/
 .env.production.local
 
 # Download/output directory (user deliverables)
-/download/
+/download/build-output/
