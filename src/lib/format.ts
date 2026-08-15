@@ -26,12 +26,18 @@ export function formatLatam(n: number | string, decimals: number = 2): string {
 export function parseLatam(value: string): number {
   if (!value) return 0;
   const cleaned = value.trim();
-  // If has comma as decimal separator (e.g., "1.234,56")
+  // Si tiene punto como separador de miles y no tiene coma
+  // Detectar: si hay puntos seguidos de exactamente 3 digitos, es formato latino
+  const hasThousandDots = /\.\d{3}(?![\d])/.test(cleaned) && /\d{1,3}\.\d{3}/.test(cleaned);
   const lastComma = cleaned.lastIndexOf(',');
   const lastDot = cleaned.lastIndexOf('.');
   if (lastComma > lastDot) {
     // Latin American format: 1.234.567,89
     return parseFloat(cleaned.replace(/\./g, '').replace(',', '.')) || 0;
+  }
+  if (hasThousandDots && lastComma === -1) {
+    // Latin American format sin decimales: 2.000.000
+    return parseFloat(cleaned.replace(/\./g, '')) || 0;
   }
   // Standard/US format: 1234567.89 or 1234567
   return parseFloat(cleaned.replace(/,/g, '')) || 0;
