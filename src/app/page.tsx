@@ -12,6 +12,7 @@ import TransactionsView from '@/components/finance/TransactionsView';
 import AnalyticsView from '@/components/finance/AnalyticsView';
 import UsersView from '@/components/finance/UsersView';
 import SettingsView from '@/components/finance/SettingsView';
+import UpdateBanner from '@/components/finance/UpdateBanner';
 import { Button } from '@/components/ui/button';
 import { DynamicIcon } from '@/lib/icons';
 import { useState } from 'react';
@@ -75,6 +76,9 @@ export default function Home() {
           {renderView()}
         </div>
       </main>
+
+      {/* Update notification banner */}
+      <UpdateBanner />
     </div>
   );
 }

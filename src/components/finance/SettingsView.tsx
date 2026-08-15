@@ -51,6 +51,7 @@ export default function SettingsView() {
   const [dbPath, setDbPath] = useState('Cargando...');
   const [dbChanging, setDbChanging] = useState(false);
   const [dbMsg, setDbMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [showRestartModal, setShowRestartModal] = useState(false);
 
   const isTauri = typeof window !== 'undefined' && !!(window as any).__TAURI__;
 
@@ -136,7 +137,11 @@ export default function SettingsView() {
       const dbData = await dbRes.json();
       if (dbRes.ok) {
         setDbPath(dbData.path);
-        setDbMsg({ type: 'ok', text: 'Ubicacion cambiada correctamente. La base de datos fue copiada a la nueva carpeta. Reinicia la aplicacion para usar la nueva ubicacion.' });
+        const usedExisting = dbData.usedExisting;
+        setShowRestartModal(true);
+        setDbMsg({ type: 'ok', text: usedExisting
+          ? 'Se encontro una base de datos existente en esa ubicacion. Se usara esa base de datos.'
+          : 'Base de datos copiada a la nueva ubicacion.' });
       } else {
         setDbMsg({ type: 'err', text: dbData.error || 'Error al cambiar la ubicacion' });
       }
@@ -316,13 +321,60 @@ export default function SettingsView() {
               {dbChanging ? 'Copiando...' : 'Cambiar Ubicación'}
             </Button>
             <p className="text-xs text-slate-400">
-              Si ya existe un archivo <code className="text-slate-500">data.db</code> en la carpeta seleccionada, se usará esa base de datos.
-              Si no existe, se creará una copia de la actual en la nueva ubicación.
-              Después de cambiar la ubicación, reiniciá la aplicación.
+              Si ya existe un archivo <code className="text-slate-500">data.db</code> en la carpeta seleccionada, se usara esa base de datos.
+              Si no existe, se creara una copia de la actual en la nueva ubicacion.
             </p>
           </div>
         </CardContent>
       </Card>
+
+      {/* Modal de reinicio obligatorio */}
+      {showRestartModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                <DynamicIcon name="RotateCcw" className="w-6 h-6 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-800 text-lg">Reinicio necesario</h3>
+                <p className="text-sm text-slate-500">La ubicacion de la base de datos cambio</p>
+              </div>
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <p className="text-sm text-amber-800">
+                Para usar la base de datos en su nueva ubicacion, la aplicacion debe reiniciarse.
+                Todos los datos no guardados se perderan.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                className="flex-1 bg-amber-500 hover:bg-amber-600"
+                onClick={async () => {
+                  try {
+                    const { process } = await import('@tauri-apps/plugin-process');
+                    await process.relaunch();
+                  } catch {
+                    window.location.reload();
+                  }
+                }}
+              >
+                <DynamicIcon name="RotateCcw" className="w-4 h-4 mr-2" />
+                Reiniciar ahora
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setShowRestartModal(false)}
+              >
+                Despues
+              </Button>
+            </div>
+            <p className="text-xs text-center text-slate-400">
+              Tambien podes cerrar y abrir la aplicacion manualmente.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
