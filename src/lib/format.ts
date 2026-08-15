@@ -33,8 +33,8 @@ export function formatLatam(n: number | string, decimals: number = 2): string {
 /**
  * Parse a Latin American formatted string back to number
  * "1.234.567,89" → 1234567.89
- * "1234567.89" → 1234567.89 (also handles US format as fallback)
- * "2,000,000" → 2000000 (handles US comma-as-thousands)
+ * "2.000.000" → 2000000
+ * "2,000,000" → 2000000 (US comma-as-thousands)
  */
 export function parseLatam(value: string): number {
   if (!value) return 0;
@@ -46,52 +46,47 @@ export function parseLatam(value: string): number {
   const lastComma = cleaned.lastIndexOf(',');
   const lastDot = cleaned.lastIndexOf('.');
 
-  // Detect Latin American format: points as thousands, last comma as decimal
-  // e.g. "1.234.567,89" or "2.000.000"
-  const hasThousandDots = /\d{1,3}\.\d{3}/.test(cleaned);
-
+  // If comma is after the last dot → comma is the decimal separator (LatAm)
   if (hasComma && hasDot && lastComma > lastDot) {
     // Latin American: 1.234.567,89
     return parseFloat(cleaned.replace(/\./g, '').replace(',', '.')) || 0;
   }
 
-  if (hasThousandDots && !hasComma) {
-    // Latin American sin decimales: 2.000.000
+  // No comma, but has multiple dots → they are thousands separators (LatAm whole number)
+  // e.g. "2.000.000" → must NOT go through parseFloat as-is (it would stop at 2nd dot)
+  const dotCount = (cleaned.match(/\./g) || []).length;
+  if (dotCount > 1) {
     return parseFloat(cleaned.replace(/\./g, '')) || 0;
   }
 
-  // Multiple commas and no dots → US format with comma thousands: "2,000,000"
+  // Single comma, no dots → could be decimal or thousands
   if (hasComma && !hasDot) {
     const commaCount = (cleaned.match(/,/g) || []).length;
     if (commaCount >= 2) {
-      // Multiple commas = US thousands separator, strip all commas
+      // Multiple commas = US thousands: "2,000,000"
       return parseFloat(cleaned.replace(/,/g, '')) || 0;
     }
-    // Single comma: could be decimal (latino input "123,45") or thousand ("200,000")
-    // Heuristic: if 3 digits after comma and no more digits, treat as thousand
+    // Single comma: check if 3 digits after → likely thousands, else decimal
     const afterComma = cleaned.slice(lastComma + 1);
     if (afterComma.length === 3 && !afterComma.includes(',')) {
-      // Likely thousand separator: "200,000"
       return parseFloat(cleaned.replace(/,/g, '')) || 0;
     }
     // Otherwise treat as decimal: "123,45" → 123.45
     return parseFloat(cleaned.replace(',', '.')) || 0;
   }
 
-  // Standard/US format: 1234567.89 or 1234567
+  // Single dot or no separators → standard/US format or plain number
   return parseFloat(cleaned.replace(/,/g, '')) || 0;
 }
 
 /**
  * Format input value as user types (for onChange handler)
  * Keeps cursor position stable
- * Handles both Latin American input and pasted US-format numbers
  */
 export function formatInputValue(value: string): string {
   // Detect pasted US-format number with commas as thousands: "2,000,000" or "1,234,567.89"
   const usFormatRegex = /^\d{1,3}(,\d{3})+(\.\d+)?$/;
   if (usFormatRegex.test(value)) {
-    // Strip commas and dots, then format as latam
     const numStr = value.replace(/,/g, '').replace('.', '');
     const dotPos = value.lastIndexOf('.');
     const hasDecimals = dotPos !== -1;
