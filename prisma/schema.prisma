@@ -121,6 +121,14 @@ model Subcategory {
   transactions Transaction[]
 }
 
+model DbLock {
+  id        String   @id @default(cuid())
+  deviceName String
+  userName   String
+  lockedAt   DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model Transaction {
   id              String           @id @default(cuid())
   type            String           @default("expense")

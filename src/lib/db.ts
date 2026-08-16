@@ -163,6 +163,15 @@ const CREATE_TABLES_SQL: string[] = [
     CONSTRAINT "Transaction_petId_fkey" FOREIGN KEY ("petId") REFERENCES "Pet" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT "Transaction_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
   )`,
+
+  // 9) DbLock — for shared database detection
+  `CREATE TABLE IF NOT EXISTS "DbLock" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "deviceName" TEXT NOT NULL,
+    "userName" TEXT NOT NULL,
+    "lockedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
+  )`,
 ]
 
 async function ensureSchema(prisma: PrismaClient) {

@@ -13,6 +13,7 @@ import AnalyticsView from '@/components/finance/AnalyticsView';
 import UsersView from '@/components/finance/UsersView';
 import SettingsView from '@/components/finance/SettingsView';
 import UpdateBanner from '@/components/finance/UpdateBanner';
+import DbLockCheck from '@/components/finance/DbLockCheck';
 import { Button } from '@/components/ui/button';
 import { DynamicIcon } from '@/lib/icons';
 import { useState } from 'react';
@@ -79,6 +80,9 @@ export default function Home() {
 
       {/* Update notification banner */}
       <UpdateBanner />
+
+      {/* Database lock check */}
+      {user && <DbLockCheck userName={user.name} />}
     </div>
   );
 }
