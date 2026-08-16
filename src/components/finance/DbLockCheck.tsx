@@ -162,6 +162,22 @@ export default function DbLockCheck({ userName }: { userName: string }) {
     };
   }, [releaseDbLock]);
 
+  const handleClose = async () => {
+    // Release any lock we may have acquired
+    await releaseDbLock();
+    // Close the app (Tauri or browser)
+    if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+      try {
+        const { exit } = await import('@tauri-apps/plugin-process');
+        exit(0);
+      } catch {
+        window.close();
+      }
+    } else {
+      window.close();
+    }
+  };
+
   const handleForceOpen = async () => {
     // Clear file lock if present
     await fetch('/api/file-lock', { method: 'DELETE' });
@@ -225,6 +241,9 @@ export default function DbLockCheck({ userName }: { userName: string }) {
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="flex gap-2 sm:gap-0">
+          <Button variant="secondary" onClick={handleClose}>
+            Cerrar y probar mas tarde
+          </Button>
           <Button variant="outline" onClick={handleForceOpen}>
             Forzar apertura
           </Button>
